@@ -134,7 +134,7 @@ GameObject:
   - component: {fileID: 64423228}
   - component: {fileID: 64423227}
   - component: {fileID: 64423226}
-  - component: {fileID: 64423225}
+  - component: {fileID: 64423230}
   m_Layer: 0
   m_Name: PhotoTo3dController
   m_TagString: Untagged
@@ -142,19 +142,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &64423225
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 64423224}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0b997f72371f3374ab0bd2073291a225, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  defaultMaterial: {fileID: 0}
 --- !u!114 &64423226
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -198,7 +185,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   webcamCapture: {fileID: 64423226}
   comfyUIClient: {fileID: 64423227}
-  objLoader: {fileID: 64423225}
+  glbLoader: {fileID: 64423230}
   statusText: {fileID: 0}
   loadingPanel: {fileID: 338869332}
   generationWaitTime: 35
@@ -222,6 +209,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &64423230
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 64423224}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ecb73cc90f6e36d44b5b04d87d58c26f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &338869332
 GameObject:
   m_ObjectHideFlags: 0

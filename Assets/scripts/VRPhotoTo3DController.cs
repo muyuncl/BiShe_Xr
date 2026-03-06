@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,8 +16,8 @@ public class VRPhotoTo3DController : MonoBehaviour
     [Tooltip("ComfyUI客户端组件")]
     public ComfyUIClient comfyUIClient;
     
-    [Tooltip("OBJ加载器组件")]
-    public RuntimeOBJLoader objLoader;
+    [Tooltip("GLB加载器组件")]
+    public GLBLoader glbLoader;
 
     [Header("UI引用")]
     [Tooltip("状态提示文本")]
@@ -58,8 +59,8 @@ public class VRPhotoTo3DController : MonoBehaviour
         if (comfyUIClient == null)
             comfyUIClient = gameObject.AddComponent<ComfyUIClient>();
         
-        if (objLoader == null)
-            objLoader = gameObject.AddComponent<RuntimeOBJLoader>();
+        if (glbLoader == null)
+            glbLoader = gameObject.AddComponent<GLBLoader>();
 
         // 隐藏加载UI
         if (loadingPanel != null)
@@ -135,7 +136,7 @@ public class VRPhotoTo3DController : MonoBehaviour
 
         // ========== 步骤1: 拍照 ==========
         UpdateStatus("正在拍照...");
-        LogDebug("📷 [步骤1/8] 开始拍照");
+        LogDebug("📷 [步骤1/7] 开始拍照");
 
         byte[] photoData = null;
         yield return webcamCapture.TakePhotoAsync((data) => { photoData = data; });
@@ -153,7 +154,7 @@ public class VRPhotoTo3DController : MonoBehaviour
 
         // ========== 步骤2: 上传图片 ==========
         UpdateStatus("正在上传图片到ComfyUI...");
-        LogDebug("📤 [步骤2/8] 开始上传图片到ComfyUI");
+        LogDebug("📤 [步骤2/7] 开始上传图片到ComfyUI");
         
         string uploadedFileName = null;
         bool uploadSuccess = false;
@@ -183,7 +184,7 @@ public class VRPhotoTo3DController : MonoBehaviour
 
         // ========== 步骤3: 提交工作流 ==========
         UpdateStatus("正在提交3D生成任务...");
-        LogDebug("🚀 [步骤3/8] 提交TripoSR工作流到ComfyUI");
+        LogDebug("🚀 [步骤3/7] 提交工作流到ComfyUI");
         
         bool queueSuccess = false;
 
@@ -211,30 +212,30 @@ public class VRPhotoTo3DController : MonoBehaviour
 
         // ========== 步骤4: 等待生成 ==========
         UpdateStatus($"正在生成3D模型，请稍候...");
-        LogDebug($"⏳ [步骤4/8] 智能等待ComfyUI生成3D模型（最多 {generationWaitTime} 秒）");
+        LogDebug($"⏳ [步骤4/7] 智能等待ComfyUI生成3D模型（最多 {generationWaitTime} 秒）");
         LogDebug("💡 提示：系统会自动检测文件生成，无需等待全部时间");
 
-        // ========== 步骤5: 智能检测生成的OBJ文件 ==========
+        // ========== 步骤5: 智能检测生成的GLB文件 ==========
         UpdateStatus("正在查找生成的模型文件...");
-        LogDebug($"🔍 [步骤5/8] 智能监控output目录");
+        LogDebug($"🔍 [步骤5/7] 智能监控output目录");
         LogDebug($"📁 监控路径: {comfyUIClient.outputDirectory}");
         
-        string objFileName = null;
+        string glbFileName = null;
         bool findSuccess = false;
 
-        yield return comfyUIClient.WaitAndGetLatestOBJ(
-            generationWaitTime, // 最大等待时间
+        yield return comfyUIClient.WaitAndGetLatestGLB(
+            generationWaitTime,
             (fileName) => 
             { 
-                objFileName = fileName;
+                glbFileName = fileName;
                 findSuccess = true;
-                LogDebug($"✅ 找到OBJ文件: {fileName}");
+                LogDebug($"✅ 找到GLB文件: {fileName}");
             },
             (error) => 
             { 
                 UpdateStatus($"未找到模型文件: {error}");
                 LogDebug($"❌ 未找到模型文件: {error}");
-                LogDebug("💡 请检查ComfyUI是否成功生成了OBJ文件");
+                LogDebug("💡 请检查ComfyUI是否成功生成了GLB文件");
                 findSuccess = false;
             }
         );
@@ -246,25 +247,20 @@ public class VRPhotoTo3DController : MonoBehaviour
             yield break;
         }
 
-        // ========== 步骤6: 下载OBJ和相关文件（材质、贴图） ==========
-        UpdateStatus("正在下载模型和贴图文件...");
-        LogDebug($"📥 [步骤6/8] 下载OBJ、MTL和贴图文件");
+        // ========== 步骤6: 下载GLB文件 ==========
+        UpdateStatus("正在下载GLB模型文件...");
+        LogDebug($"📥 [步骤6/7] 下载GLB文件");
         
-        Dictionary<string, byte[]> modelFiles = null;
+        byte[] glbData = null;
         bool downloadSuccess = false;
 
-        yield return comfyUIClient.DownloadRelatedFiles(
-            objFileName,
-            (files) => 
+        yield return comfyUIClient.DownloadFile(
+            glbFileName,
+            (data) => 
             { 
-                modelFiles = files;
+                glbData = data;
                 downloadSuccess = true;
-                LogDebug($"✅ 文件下载完成！共 {files.Count} 个文件");
-                foreach (var key in files.Keys)
-                {
-                    if (key != "textureName")
-                        LogDebug($"  - {key}: {files[key].Length / 1024}KB");
-                }
+                LogDebug($"✅ GLB文件下载完成！大小: {data.Length / 1024}KB");
             },
             (error) => 
             { 
@@ -274,23 +270,39 @@ public class VRPhotoTo3DController : MonoBehaviour
             }
         );
 
-        if (!downloadSuccess)
+        if (!downloadSuccess || glbData == null)
         {
             yield return new WaitForSeconds(3f);
             FinishGeneration();
             yield break;
         }
 
-        // ========== 步骤7: 加载模型（带贴图） ==========
+        // ========== 步骤7: 加载GLB模型 ==========
         UpdateStatus("正在加载3D模型...");
-        LogDebug("🎨 [步骤7/8] 解析OBJ文件并应用材质贴图");
+        LogDebug("🎨 [步骤7/7] 加载GLB模型");
         
-        GameObject model = objLoader.LoadOBJWithTexture(modelFiles, "GeneratedModel");
+        GameObject model = null;
+        bool loadSuccess = false;
 
-        if (model == null)
+        yield return glbLoader.LoadGLBFromBytes(
+            glbData,
+            "GeneratedModel",
+            (loadedModel) =>
+            {
+                model = loadedModel;
+                loadSuccess = true;
+            },
+            (error) =>
+            {
+                UpdateStatus($"模型加载失败: {error}");
+                LogDebug($"❌ 模型加载失败: {error}");
+            }
+        );
+
+        if (!loadSuccess || model == null)
         {
             UpdateStatus("模型加载失败！");
-            LogDebug("❌ 模型加载失败！OBJ文件可能损坏");
+            LogDebug("❌ 模型加载失败！GLB文件可能损坏");
             yield return new WaitForSeconds(3f);
             FinishGeneration();
             yield break;

@@ -18,7 +18,7 @@ public class ComfyUIClient : MonoBehaviour
     [Tooltip("ComfyUI输出目录的绝对路径")]
     public string outputDirectory = @"D:\comfyui\ComfyUI-aki-v3\ComfyUI\output";
 
-    // 工作流JSON模板（从你提供的workflow复制）
+    // 工作流JSON模板（输出GLB格式）
     private const string WORKFLOW_TEMPLATE = @"{
   ""12"": {
     ""inputs"": {
@@ -30,13 +30,6 @@ public class ComfyUIClient : MonoBehaviour
     },
     ""class_type"": ""TripoSRSampler""
   },
-  ""13"": {
-    ""inputs"": {
-      ""preview3d"": null,
-      ""mesh"": [""12"", 0]
-    },
-    ""class_type"": ""TripoSRViewer""
-  },
   ""14"": {
     ""inputs"": {
       ""model"": ""triposrmodel.ckpt"",
@@ -44,25 +37,32 @@ public class ComfyUIClient : MonoBehaviour
     },
     ""class_type"": ""TripoSRModelLoader""
   },
-  ""15"": {
-    ""inputs"": {
-      ""image"": ""{IMAGE_NAME}""
-    },
-    ""class_type"": ""LoadImage""
-  },
   ""17"": {
     ""inputs"": {
       ""rembg_session"": [""18"", 0],
-      ""image"": [""15"", 0]
+      ""image"": [""23"", 0]
     },
     ""class_type"": ""ImageRemoveBackground+""
   },
   ""18"": {
     ""inputs"": {
       ""model"": ""u2net: general purpose"",
-      ""providers"": ""CPU""
+      ""providers"": ""CUDA""
     },
     ""class_type"": ""RemBGSession+""
+  },
+  ""23"": {
+    ""inputs"": {
+      ""image"": ""{IMAGE_NAME}""
+    },
+    ""class_type"": ""LoadImage""
+  },
+  ""26"": {
+    ""inputs"": {
+      ""filename_prefix"": ""unity_output"",
+      ""mesh"": [""12"", 0]
+    },
+    ""class_type"": ""Save Mesh as GLB""
   }
 }";
 
@@ -134,9 +134,9 @@ public class ComfyUIClient : MonoBehaviour
     }
 
     /// <summary>
-    /// 智能等待并获取最新生成的OBJ文件（支持实时检测）
+    /// 智能等待并获取最新生成的GLB文件（支持实时检测）
     /// </summary>
-    public IEnumerator WaitAndGetLatestOBJ(float maxWaitTime, Action<string> onSuccess, Action<string> onError)
+    public IEnumerator WaitAndGetLatestGLB(float maxWaitTime, Action<string> onSuccess, Action<string> onError)
     {
         Debug.Log($"🔍 开始监控output目录，最多等待 {maxWaitTime} 秒");
         
@@ -155,16 +155,16 @@ public class ComfyUIClient : MonoBehaviour
         // 循环检测，每2秒检查一次
         while (Time.time - startTime < maxWaitTime)
         {
-            string[] objFiles = System.IO.Directory.GetFiles(outputDirectory, "*.obj");
+            string[] glbFiles = System.IO.Directory.GetFiles(outputDirectory, "*.glb");
             
             // 查找在检测开始后创建的文件
-            foreach (string file in objFiles)
+            foreach (string file in glbFiles)
             {
                 DateTime fileTime = System.IO.File.GetLastWriteTime(file);
                 if (fileTime > checkStartTime)
                 {
                     foundFile = file;
-                    Debug.Log($"✅ 检测到新生成的OBJ文件: {System.IO.Path.GetFileName(file)}");
+                    Debug.Log($"✅ 检测到新生成的GLB文件: {System.IO.Path.GetFileName(file)}");
                     Debug.Log($"📅 文件时间: {fileTime}");
                     break;
                 }
@@ -183,23 +183,23 @@ public class ComfyUIClient : MonoBehaviour
         // 如果没找到新文件，尝试获取最新的文件
         if (foundFile == null)
         {
-            Debug.LogWarning("⚠️ 未检测到新文件，尝试获取最新的OBJ文件");
+            Debug.LogWarning("⚠️ 未检测到新文件，尝试获取最新的GLB文件");
             
             try
             {
-                string[] objFiles = System.IO.Directory.GetFiles(outputDirectory, "*.obj");
+                string[] GLBFiles = System.IO.Directory.GetFiles(outputDirectory, "*.glb");
                 
-                if (objFiles.Length == 0)
+                if (GLBFiles.Length == 0)
                 {
-                    onError?.Invoke("未找到任何OBJ文件");
+                    onError?.Invoke("未找到任何GLB文件");
                     yield break;
                 }
 
                 // 找到最新的文件
-                foundFile = objFiles[0];
+                foundFile = GLBFiles[0];
                 DateTime latestTime = System.IO.File.GetLastWriteTime(foundFile);
 
-                foreach (string file in objFiles)
+                foreach (string file in GLBFiles)
                 {
                     DateTime fileTime = System.IO.File.GetLastWriteTime(file);
                     if (fileTime > latestTime)
@@ -209,11 +209,11 @@ public class ComfyUIClient : MonoBehaviour
                     }
                 }
                 
-                Debug.Log($"📁 使用最新的OBJ文件: {System.IO.Path.GetFileName(foundFile)}");
+                Debug.Log($"📁 使用最新的GLB文件: {System.IO.Path.GetFileName(foundFile)}");
             }
             catch (Exception e)
             {
-                onError?.Invoke($"查找OBJ文件时出错: {e.Message}");
+                onError?.Invoke($"查找GLB文件时出错: {e.Message}");
                 yield break;
             }
         }
@@ -252,25 +252,25 @@ public class ComfyUIClient : MonoBehaviour
     /// <summary>
     /// 下载相关的材质和贴图文件
     /// </summary>
-    public IEnumerator DownloadRelatedFiles(string objFileName, Action<Dictionary<string, byte[]>> onSuccess, Action<string> onError)
+    public IEnumerator DownloadRelatedFiles(string GLBFileName, Action<Dictionary<string, byte[]>> onSuccess, Action<string> onError)
     {
         Dictionary<string, byte[]> files = new Dictionary<string, byte[]>();
         
-        // 下载OBJ文件
-        bool objSuccess = false;
-        yield return DownloadFile(objFileName, (data) => 
+        // 下载GLB文件
+        bool GLBSuccess = false;
+        yield return DownloadFile(GLBFileName, (data) => 
         {
-            files["obj"] = data;
-            objSuccess = true;
+            files["GLB"] = data;
+            GLBSuccess = true;
         }, onError);
         
-        if (!objSuccess)
+        if (!GLBSuccess)
         {
             yield break;
         }
         
         // 尝试下载MTL文件
-        string mtlFileName = objFileName.Replace(".obj", ".mtl");
+        string mtlFileName = GLBFileName.Replace(".glb", ".mtl");
         Debug.Log($"🔍 尝试下载材质文件: {mtlFileName}");
         
         yield return DownloadFile(mtlFileName, (data) => 
@@ -283,7 +283,7 @@ public class ComfyUIClient : MonoBehaviour
         });
         
         // 尝试下载贴图文件（常见的命名方式）
-        string baseFileName = System.IO.Path.GetFileNameWithoutExtension(objFileName);
+        string baseFileName = System.IO.Path.GetFileNameWithoutExtension(GLBFileName);
         string[] possibleTextures = new string[]
         {
             $"{baseFileName}.png",
