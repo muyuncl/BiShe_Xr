@@ -1,0 +1,64 @@
+﻿<!doctype html><html lang='zh-CN'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>四卡组原型</title><style>
+:root{--panel:#b9b7b3;--slot:#d8d7d5;--title:#e7e5e1}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(180deg,#cfcac4,#ddd9d3);font-family:"Microsoft YaHei",sans-serif}
+.stage{width:835px;height:625px;padding:16px 22px;display:grid;grid-template-columns:302px 302px 112px;grid-template-rows:92px 1fr;gap:18px}
+.panel{background:var(--panel);border-radius:8px;box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 10px 22px rgba(0,0,0,.12);position:relative;padding:14px;border:1px solid rgba(255,255,255,.15)}
+.title-plate{background:var(--title);border-radius:2px;box-shadow:0 3px 8px rgba(0,0,0,.12);display:grid;place-items:center;color:#8f8d89;font-size:12px;font-weight:700;letter-spacing:.08em}.title-center{margin:0 auto}
+.taboos{grid-column:1/3;grid-row:1;padding:10px 16px 10px 14px}.gifts{grid-column:3;grid-row:1/3;padding:14px 12px}.culture{grid-column:1;grid-row:2}.target{grid-column:2;grid-row:2}
+.taboo-title{position:absolute;left:14px;top:10px;width:44px;height:72px;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:.18em}
+.h-scroll{position:absolute;left:68px;right:14px;top:10px;bottom:10px;overflow-x:auto;overflow-y:hidden;display:flex;gap:8px;align-items:flex-start;padding:0 2px 8px}
+.h-scroll::-webkit-scrollbar,.v-scroll::-webkit-scrollbar,.grid-scroll::-webkit-scrollbar{width:8px;height:8px}.h-scroll::-webkit-scrollbar-thumb,.v-scroll::-webkit-scrollbar-thumb,.grid-scroll::-webkit-scrollbar-thumb{background:#a29f9a;border-radius:999px}
+.card-mini,.gift-card,.grid-card{background:var(--slot);border-radius:5px;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 2px 6px rgba(0,0,0,.12);border:1px solid rgba(160,157,152,.55);color:#7a7772;position:relative}
+.card-mini{width:34px;height:54.4px;flex:0 0 auto;display:grid;place-items:end center;padding-bottom:6px;font-size:9px;font-weight:700}
+.grid-scroll{position:absolute;left:14px;right:14px;top:56px;bottom:14px;overflow-y:auto;overflow-x:hidden;padding-top:12px;border-top:3px solid rgba(144,141,136,.75)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.grid-card{width:100%;aspect-ratio:5/8;display:grid;place-items:end center;padding-bottom:6px;font-size:11px;font-weight:700}
+.v-scroll{position:absolute;left:12px;right:12px;top:56px;bottom:14px;overflow-y:auto;overflow-x:hidden;padding-top:12px;border-top:3px solid rgba(144,141,136,.75);display:flex;flex-direction:column;gap:10px}.gift-card{width:100%;aspect-ratio:5/8;display:grid;place-items:end center;padding-bottom:8px;font-size:11px;font-weight:700}
+.badge{position:absolute;top:6px;left:6px;background:rgba(255,255,255,.6);padding:2px 6px;border-radius:999px;font-size:9px;color:#6f6c66;font-weight:800}
+.controls{position:fixed;left:18px;bottom:18px;background:rgba(255,255,255,.86);border-radius:14px;padding:12px 14px;box-shadow:0 10px 20px rgba(0,0,0,.08);display:flex;gap:10px;align-items:center;color:#555}.controls button{border:0;border-radius:10px;background:#9a9894;color:#fff;padding:8px 12px;cursor:pointer}.controls button.alt{background:#c2beba;color:#4e4c48}
+</style></head><body>
+<div class='stage'>
+  <section class='panel taboos'>
+    <div class='title-plate taboo-title'>禁忌卡组</div>
+    <div id='taboosList' class='h-scroll'></div>
+  </section>
+
+  <section class='panel culture'>
+    <div class='title-plate title-center' style='width:156px;height:26px'>文化元素卡组</div>
+    <div id='cultureList' class='grid-scroll'><div class='grid' id='cultureGrid'></div></div>
+  </section>
+
+  <section class='panel target'>
+    <div class='title-plate title-center' style='width:156px;height:26px'>目标国家文化元素卡组</div>
+    <div id='targetList' class='grid-scroll'><div class='grid' id='targetGrid'></div></div>
+  </section>
+
+  <section class='panel gifts'>
+    <div class='title-plate title-center' style='width:78px;height:26px'>国礼卡组</div>
+    <div id='giftList' class='v-scroll'></div>
+  </section>
+</div>
+
+<div class='controls'>
+  <span>交互演示：</span>
+  <button data-mode='few'>少量结果</button>
+  <button data-mode='many'>大量结果</button>
+  <button data-mode='mixed'>混合结果</button>
+  <button class='alt' id='shuffleBtn'>重排内容</button>
+</div>
+
+<script>
+const datasets={
+  few:{taboos:['白菊花','数字4','乌鸦'],culture:['云纹','青花瓷','四海升平','龙纹','丝绸'],target:['富士山','樱花','茶道'],gifts:['青花瓷礼盒','丝绸卷轴']},
+  many:{taboos:['白菊花','数字4','乌鸦','白伞','钟表','黑百合','破镜','尖角图腾','葬礼白布','乌面具'],culture:['云纹','青花瓷','四海升平','龙纹','丝绸','玉璧','凤纹','牡丹','漆器','山水','宫灯','团扇','青铜纹','如意','瑞鹤','编钟'],target:['富士山','樱花','茶道','和服纹样','浮世绘','神社鸟居','寿司','武士甲','纸扇','东京塔','枯山水','抹茶'],gifts:['青花瓷礼盒','丝绸卷轴','玉雕摆件','山水屏风','宫灯礼匣','漆器套装']},
+  mixed:{taboos:['白菊花','数字4','乌鸦','钟表'],culture:['云纹','青花瓷','四海升平','龙纹','丝绸','玉璧','凤纹'],target:['富士山','樱花','茶道','和服纹样','神社鸟居'],gifts:['青花瓷礼盒','丝绸卷轴','玉雕摆件']}
+};
+let current='mixed';
+function renderSet(name){current=name;const d=datasets[name];renderRow('taboosList',d.taboos,'mini');renderGrid('cultureGrid',d.culture);renderGrid('targetGrid',d.target);renderRow('giftList',d.gifts,'gift')}
+function renderRow(id,list,type){const root=document.getElementById(id);root.innerHTML='';list.forEach(item=>root.appendChild(type==='mini'?miniCard(item):giftCard(item)))}
+function renderGrid(id,list){const root=document.getElementById(id);root.innerHTML='';list.forEach((item,i)=>root.appendChild(gridCard(item,i)))}
+function miniCard(text){const d=document.createElement('div');d.className='card-mini';d.innerHTML=`<span class='badge'>禁忌</span><span>${text}</span>`;return d}
+function gridCard(text,i){const d=document.createElement('div');d.className='grid-card';d.innerHTML=`<span class='badge'>${i+1}</span><span>${text}</span>`;return d}
+function giftCard(text){const d=document.createElement('div');d.className='gift-card';d.innerHTML=`<span class='badge'>推荐</span><span>${text}</span>`;return d}
+function shuffleCurrent(){const d=datasets[current];['taboos','culture','target','gifts'].forEach(k=>d[k]=[...d[k]].sort(()=>Math.random()-.5));renderSet(current)}
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>renderSet(b.dataset.mode));document.getElementById('shuffleBtn').onclick=shuffleCurrent;renderSet(current);
+</script></body></html>

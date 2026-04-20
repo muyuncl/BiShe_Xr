@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -11,9 +12,17 @@ using UnityEngine.Networking;
 /// </summary>
 public class ComfyUIClient : MonoBehaviour
 {
+    [Serializable]
+    public class ComfyGeneratedFileInfo
+    {
+        public string filename;
+        public string subfolder;
+        public string type;
+    }
+
     [Header("ComfyUI 设置")]
     [Tooltip("ComfyUI服务器地址")]
-    public string serverUrl = "http://127.0.0.1:8188";
+    public string serverUrl = "http://192.168.1.100:8188";
     
     [Tooltip("ComfyUI输出目录的绝对路径")]
     public string outputDirectory = @"D:\comfyui\ComfyUI-aki-v3\ComfyUI\output";
@@ -122,7 +131,17 @@ public class ComfyUIClient : MonoBehaviour
             {
                 string response = request.downloadHandler.text;
                 Debug.Log($"任务提交成功: {response}");
-                onSuccess?.Invoke(response);
+                string promptId = ExtractPromptId(response);
+                if (!string.IsNullOrEmpty(promptId))
+                {
+                    onSuccess?.Invoke(promptId);
+                }
+                else
+                {
+                    string error = $"任务提交成功但未解析到 prompt_id，响应: {response}";
+                    Debug.LogError(error);
+                    onError?.Invoke(error);
+                }
             }
             else
             {
@@ -134,92 +153,48 @@ public class ComfyUIClient : MonoBehaviour
     }
 
     /// <summary>
-    /// 智能等待并获取最新生成的GLB文件（支持实时检测）
+    /// 轮询任务历史，等待并获取生成的GLB文件
     /// </summary>
-    public IEnumerator WaitAndGetLatestGLB(float maxWaitTime, Action<string> onSuccess, Action<string> onError)
+    public IEnumerator WaitForPromptOutputGLB(string promptId, float maxWaitTime, Action<ComfyGeneratedFileInfo> onSuccess, Action<string> onError)
     {
-        Debug.Log($"🔍 开始监控output目录，最多等待 {maxWaitTime} 秒");
-        
-        if (!System.IO.Directory.Exists(outputDirectory))
+        if (string.IsNullOrEmpty(promptId))
         {
-            onError?.Invoke($"输出目录不存在: {outputDirectory}");
+            onError?.Invoke("prompt_id 为空，无法查询任务状态");
             yield break;
         }
 
-        // 记录开始时间和初始文件列表
+        Debug.Log($"🔍 开始轮询 ComfyUI 历史任务，prompt_id={promptId}，最多等待 {maxWaitTime} 秒");
         float startTime = Time.time;
-        DateTime checkStartTime = DateTime.Now.AddSeconds(-2); // 往前推2秒，确保捕获到文件
-        
-        string foundFile = null;
-        
-        // 循环检测，每2秒检查一次
+
         while (Time.time - startTime < maxWaitTime)
         {
-            string[] glbFiles = System.IO.Directory.GetFiles(outputDirectory, "*.glb");
-            
-            // 查找在检测开始后创建的文件
-            foreach (string file in glbFiles)
+            string historyUrl = $"{serverUrl}/history/{UnityWebRequest.EscapeURL(promptId)}";
+            using (UnityWebRequest request = UnityWebRequest.Get(historyUrl))
             {
-                DateTime fileTime = System.IO.File.GetLastWriteTime(file);
-                if (fileTime > checkStartTime)
-                {
-                    foundFile = file;
-                    Debug.Log($"✅ 检测到新生成的GLB文件: {System.IO.Path.GetFileName(file)}");
-                    Debug.Log($"📅 文件时间: {fileTime}");
-                    break;
-                }
-            }
-            
-            if (foundFile != null)
-                break;
-            
-            // 显示等待进度
-            float elapsed = Time.time - startTime;
-            Debug.Log($"⏳ 等待中... 已等待 {Mathf.FloorToInt(elapsed)} 秒");
-            
-            yield return new WaitForSeconds(2f);
-        }
-        
-        // 如果没找到新文件，尝试获取最新的文件
-        if (foundFile == null)
-        {
-            Debug.LogWarning("⚠️ 未检测到新文件，尝试获取最新的GLB文件");
-            
-            try
-            {
-                string[] GLBFiles = System.IO.Directory.GetFiles(outputDirectory, "*.glb");
-                
-                if (GLBFiles.Length == 0)
-                {
-                    onError?.Invoke("未找到任何GLB文件");
-                    yield break;
-                }
+                request.timeout = 15;
+                yield return request.SendWebRequest();
 
-                // 找到最新的文件
-                foundFile = GLBFiles[0];
-                DateTime latestTime = System.IO.File.GetLastWriteTime(foundFile);
-
-                foreach (string file in GLBFiles)
+                if (request.result == UnityWebRequest.Result.Success)
                 {
-                    DateTime fileTime = System.IO.File.GetLastWriteTime(file);
-                    if (fileTime > latestTime)
+                    string response = request.downloadHandler.text;
+                    if (TryExtractGLBFileInfoFromHistory(response, out ComfyGeneratedFileInfo fileInfo))
                     {
-                        latestTime = fileTime;
-                        foundFile = file;
+                        Debug.Log($"✅ 检测到GLB输出: {fileInfo.filename}");
+                        onSuccess?.Invoke(fileInfo);
+                        yield break;
                     }
                 }
-                
-                Debug.Log($"📁 使用最新的GLB文件: {System.IO.Path.GetFileName(foundFile)}");
+                else
+                {
+                    Debug.LogWarning($"查询 history 失败: {request.error}");
+                }
             }
-            catch (Exception e)
-            {
-                onError?.Invoke($"查找GLB文件时出错: {e.Message}");
-                yield break;
-            }
-        }
 
-        string fileName = System.IO.Path.GetFileName(foundFile);
-        onSuccess?.Invoke(fileName);
+            float elapsed = Time.time - startTime;
+            Debug.Log($"⏳ 任务未完成，已等待 {Mathf.FloorToInt(elapsed)} 秒");
+            yield return new WaitForSeconds(2f);
+        }
+        onError?.Invoke($"等待任务输出超时（{maxWaitTime} 秒），prompt_id={promptId}");
     }
 
     /// <summary>
@@ -238,6 +213,40 @@ public class ComfyUIClient : MonoBehaviour
             {
                 byte[] data = request.downloadHandler.data;
                 Debug.Log($"文件下载成功，大小: {data.Length} bytes");
+                onSuccess?.Invoke(data);
+            }
+            else
+            {
+                string error = $"下载失败: {request.error}";
+                Debug.LogError(error);
+                onError?.Invoke(error);
+            }
+        }
+    }
+
+    public IEnumerator DownloadFile(ComfyGeneratedFileInfo fileInfo, Action<byte[]> onSuccess, Action<string> onError)
+    {
+        if (fileInfo == null || string.IsNullOrEmpty(fileInfo.filename))
+        {
+            onError?.Invoke("下载失败：文件信息为空");
+            yield break;
+        }
+
+        string url = $"{serverUrl}/view?filename={UnityWebRequest.EscapeURL(fileInfo.filename)}";
+        if (!string.IsNullOrEmpty(fileInfo.subfolder))
+            url += $"&subfolder={UnityWebRequest.EscapeURL(fileInfo.subfolder)}";
+        if (!string.IsNullOrEmpty(fileInfo.type))
+            url += $"&type={UnityWebRequest.EscapeURL(fileInfo.type)}";
+
+        using (UnityWebRequest request = UnityWebRequest.Get(url))
+        {
+            request.timeout = 60;
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                byte[] data = request.downloadHandler.data;
+                Debug.Log($"文件下载成功，大小: {data.Length} bytes, 文件: {fileInfo.filename}");
                 onSuccess?.Invoke(data);
             }
             else
@@ -322,6 +331,14 @@ public class ComfyUIClient : MonoBehaviour
     /// </summary>
     public IEnumerator TestConnection(Action<bool> callback)
     {
+        yield return TestConnectionDetailed((success, _) => callback?.Invoke(success));
+    }
+
+    /// <summary>
+    /// 测试连接并返回详细错误信息（用于演示现场排障提示）
+    /// </summary>
+    public IEnumerator TestConnectionDetailed(Action<bool, string> callback)
+    {
         using (UnityWebRequest request = UnityWebRequest.Get($"{serverUrl}/system_stats"))
         {
             request.timeout = 5;
@@ -331,12 +348,115 @@ public class ComfyUIClient : MonoBehaviour
             if (success)
             {
                 Debug.Log("ComfyUI连接成功！");
+                callback?.Invoke(true, string.Empty);
             }
             else
             {
                 Debug.LogError($"ComfyUI连接失败: {request.error}");
+                string details = BuildConnectionHint(request.error);
+                callback?.Invoke(false, details);
             }
-            callback?.Invoke(success);
         }
+    }
+
+    private string BuildConnectionHint(string requestError)
+    {
+        string baseMsg = $"地址: {serverUrl}\n错误: {requestError}";
+        if (IsLoopbackUrl(serverUrl))
+        {
+            return $"{baseMsg}\n检测到你在使用 localhost/127.0.0.1。Quest 真机请改成电脑局域网 IP，例如 http://192.168.1.100:8188";
+        }
+
+        return $"{baseMsg}\n请确认：1) Quest 与电脑同一局域网；2) ComfyUI 正在运行；3) 防火墙放行 8188 端口。";
+    }
+
+    private static bool IsLoopbackUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        if (url.Contains("localhost")) return true;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri)) return false;
+        return uri.Host == "127.0.0.1" || uri.Host == "::1";
+    }
+
+    private static string ExtractPromptId(string responseJson)
+    {
+        try
+        {
+            var obj = JObject.Parse(responseJson);
+            var token = obj["prompt_id"];
+            return token?.ToString();
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"解析 prompt_id 失败: {e.Message}");
+            return null;
+        }
+    }
+
+    private static bool TryExtractGLBFileInfoFromHistory(string historyJson, out ComfyGeneratedFileInfo fileInfo)
+    {
+        fileInfo = null;
+
+        try
+        {
+            var root = JObject.Parse(historyJson);
+            foreach (var promptEntry in root.Properties())
+            {
+                var outputs = promptEntry.Value?["outputs"] as JObject;
+                if (outputs == null) continue;
+
+                foreach (var node in outputs.Properties())
+                {
+                    var nodeOutput = node.Value as JObject;
+                    if (nodeOutput == null) continue;
+
+                    // 常见 Save Mesh as GLB 输出键：meshes
+                    var meshArray = nodeOutput["meshes"] as JArray;
+                    if (meshArray != null)
+                    {
+                        foreach (var item in meshArray)
+                        {
+                            string filename = item?["filename"]?.ToString();
+                            if (!string.IsNullOrEmpty(filename) && filename.EndsWith(".glb", StringComparison.OrdinalIgnoreCase))
+                            {
+                                fileInfo = new ComfyGeneratedFileInfo
+                                {
+                                    filename = filename,
+                                    subfolder = item?["subfolder"]?.ToString(),
+                                    type = item?["type"]?.ToString()
+                                };
+                                return true;
+                            }
+                        }
+                    }
+
+                    // 兜底：遍历节点输出中所有数组字段，找 filename=.glb
+                    foreach (var child in nodeOutput.Properties())
+                    {
+                        if (child.Value is not JArray array) continue;
+                        foreach (var item in array)
+                        {
+                            string filename = item?["filename"]?.ToString();
+                            if (!string.IsNullOrEmpty(filename) && filename.EndsWith(".glb", StringComparison.OrdinalIgnoreCase))
+                            {
+                                fileInfo = new ComfyGeneratedFileInfo
+                                {
+                                    filename = filename,
+                                    subfolder = item?["subfolder"]?.ToString(),
+                                    type = item?["type"]?.ToString()
+                                };
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"解析 history 输出失败: {e.Message}");
+        }
+
+        return false;
     }
 }

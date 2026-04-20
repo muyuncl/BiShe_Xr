@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: dc0caca49674abd47b057ef54c92be1f
+guid: 7a8e0e8a66e019243914b0eb39b48775
 TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
@@ -9,7 +9,7 @@ TrueTypeFontImporter:
   characterPadding: 1
   includeFontData: 1
   fontNames:
-  - ??????Regular
+  - HarmonyOS Sans SC
   fallbackFontReferences: []
   customCharacters: 
   fontRenderingMode: 0

@@ -1,0 +1,56 @@
+{
+  "giftCards": [
+    {
+      "id": "1001",
+      "name": "\"四海升平\" 赏瓶",
+      "description": "传递开放包容、合作共赢的外交理念，塑造文明大国、东方大国形象",
+      "image": "Images/四海升平.jpg",
+      "politicalGoals": [
+        "开放包容",
+        "合作共赢"
+      ],
+      "targetCountry": "",
+      "taboos": []
+    }
+  ],
+  "cultureElements": [
+    {
+      "id": "2001",
+      "name": "云纹",
+      "description": "111111",
+      "image": "Images/云纹.jpg",
+      "politicalGoals": [
+        "自由"
+      ],
+      "targetCountry": "",
+      "taboos": []
+    }
+  ],
+  "targetCountryElements": [
+    {
+      "id": "3001",
+      "name": "富士山",
+      "description": "333333",
+      "image": "Images/富士山.jpg",
+      "politicalGoals": [],
+      "targetCountry": "日本",
+      "taboos": []
+    }
+  ],
+  "taboos": [
+    {
+      "id": "4001",
+      "name": "白色菊花",
+      "description": "44444",
+      "image": "Images/白菊花.jpg",
+      "politicalGoals": [],
+      "targetCountry": "",
+      "taboos": [
+        {
+          "country": "日本",
+          "reason": ""
+        }
+      ]
+    }
+  ]
+}

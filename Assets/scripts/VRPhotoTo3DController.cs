@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 /// <summary>
 /// VR拍照生成3D模型主控制器
@@ -20,8 +21,14 @@ public class VRPhotoTo3DController : MonoBehaviour
     public GLBLoader glbLoader;
 
     [Header("UI引用")]
-    [Tooltip("状态提示文本")]
-    public Text statusText;
+    [Tooltip("生成按钮")]
+    public Button generateButton;
+    
+    [Tooltip("状态提示文本（TextMeshPro）")]
+    public TextMeshProUGUI statusText;
+    
+    [Tooltip("网络诊断文本（可选）")]
+    public TextMeshProUGUI networkDiagnosticText;
     
     [Tooltip("加载UI面板")]
     public GameObject loadingPanel;
@@ -91,17 +98,21 @@ public class VRPhotoTo3DController : MonoBehaviour
         UpdateStatus("正在连接ComfyUI...");
         LogDebug("🔌 开始测试ComfyUI连接...");
         
-        yield return comfyUIClient.TestConnection((success) =>
+        yield return comfyUIClient.TestConnectionDetailed((success, details) =>
         {
             if (success)
             {
                 UpdateStatus("ComfyUI连接成功，准备就绪");
                 LogDebug("✅ ComfyUI连接成功！");
+                if (networkDiagnosticText != null)
+                    networkDiagnosticText.text = $"服务可达: {comfyUIClient.serverUrl}";
             }
             else
             {
                 UpdateStatus("ComfyUI连接失败，请检查服务是否启动");
-                LogDebug("❌ ComfyUI连接失败！请检查服务是否在 http://127.0.0.1:8188 运行");
+                LogDebug($"❌ ComfyUI连接失败！\n{details}");
+                if (networkDiagnosticText != null)
+                    networkDiagnosticText.text = details;
             }
         });
     }
@@ -130,6 +141,10 @@ public class VRPhotoTo3DController : MonoBehaviour
     private IEnumerator GenerateModelFromPhoto()
     {
         isGenerating = true;
+        
+        // 禁用生成按钮
+        if (generateButton != null)
+            generateButton.interactable = false;
         
         if (loadingPanel != null)
             loadingPanel.SetActive(true);
@@ -187,13 +202,15 @@ public class VRPhotoTo3DController : MonoBehaviour
         LogDebug("🚀 [步骤3/7] 提交工作流到ComfyUI");
         
         bool queueSuccess = false;
+        string promptId = null;
 
         yield return comfyUIClient.QueuePrompt(
             uploadedFileName,
-            (response) => 
+            (queuedPromptId) => 
             { 
                 queueSuccess = true;
-                LogDebug($"✅ 工作流提交成功！ComfyUI开始处理");
+                promptId = queuedPromptId;
+                LogDebug($"✅ 工作流提交成功！prompt_id: {promptId}");
             },
             (error) => 
             { 
@@ -212,24 +229,24 @@ public class VRPhotoTo3DController : MonoBehaviour
 
         // ========== 步骤4: 等待生成 ==========
         UpdateStatus($"正在生成3D模型，请稍候...");
-        LogDebug($"⏳ [步骤4/7] 智能等待ComfyUI生成3D模型（最多 {generationWaitTime} 秒）");
-        LogDebug("💡 提示：系统会自动检测文件生成，无需等待全部时间");
+        LogDebug($"⏳ [步骤4/7] 等待ComfyUI生成3D模型（最多 {generationWaitTime} 秒）");
+        LogDebug("💡 提示：系统会按 prompt_id 轮询 ComfyUI history 接口");
 
-        // ========== 步骤5: 智能检测生成的GLB文件 ==========
+        // ========== 步骤5: 轮询任务并获取GLB文件信息 ==========
         UpdateStatus("正在查找生成的模型文件...");
-        LogDebug($"🔍 [步骤5/7] 智能监控output目录");
-        LogDebug($"📁 监控路径: {comfyUIClient.outputDirectory}");
+        LogDebug($"🔍 [步骤5/7] 查询 ComfyUI history，prompt_id={promptId}");
         
-        string glbFileName = null;
+        ComfyUIClient.ComfyGeneratedFileInfo glbFileInfo = null;
         bool findSuccess = false;
 
-        yield return comfyUIClient.WaitAndGetLatestGLB(
+        yield return comfyUIClient.WaitForPromptOutputGLB(
+            promptId,
             generationWaitTime,
-            (fileName) => 
+            (fileInfo) => 
             { 
-                glbFileName = fileName;
+                glbFileInfo = fileInfo;
                 findSuccess = true;
-                LogDebug($"✅ 找到GLB文件: {fileName}");
+                LogDebug($"✅ 找到GLB文件: {fileInfo.filename}");
             },
             (error) => 
             { 
@@ -255,7 +272,7 @@ public class VRPhotoTo3DController : MonoBehaviour
         bool downloadSuccess = false;
 
         yield return comfyUIClient.DownloadFile(
-            glbFileName,
+            glbFileInfo,
             (data) => 
             { 
                 glbData = data;
@@ -381,6 +398,10 @@ public class VRPhotoTo3DController : MonoBehaviour
     private void FinishGeneration()
     {
         isGenerating = false;
+        
+        // 启用生成按钮
+        if (generateButton != null)
+            generateButton.interactable = true;
         
         if (loadingPanel != null)
             loadingPanel.SetActive(false);

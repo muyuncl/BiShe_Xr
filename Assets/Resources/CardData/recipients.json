@@ -1,0 +1,298 @@
+{
+  "nodes": [
+    {
+      "id": "global",
+      "label": "国际通用",
+      "parentId": "",
+      "level": 1,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "国际通用" ]
+    },
+
+    {
+      "id": "continent",
+      "label": "大洲",
+      "parentId": "",
+      "level": 1,
+      "selectable": false,
+      "nodeType": "category",
+      "coveredRecipients": []
+    },
+    {
+      "id": "asia",
+      "label": "亚洲",
+      "parentId": "continent",
+      "level": 2,
+      "selectable": true,
+      "nodeType": "region",
+      "coveredRecipients": [ "亚洲", "日本", "朝鲜", "韩国", "印度", "泰国" ]
+    },
+    {
+      "id": "japan",
+      "label": "日本",
+      "parentId": "asia",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "日本" ]
+    },
+    {
+      "id": "north_korea",
+      "label": "朝鲜",
+      "parentId": "asia",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "朝鲜" ]
+    },
+    {
+      "id": "south_korea",
+      "label": "韩国",
+      "parentId": "asia",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "韩国" ]
+    },
+    {
+      "id": "india",
+      "label": "印度",
+      "parentId": "asia",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "印度" ]
+    },
+    {
+      "id": "thailand",
+      "label": "泰国",
+      "parentId": "asia",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "泰国" ]
+    },
+
+    {
+      "id": "africa",
+      "label": "非洲",
+      "parentId": "continent",
+      "level": 2,
+      "selectable": true,
+      "nodeType": "region",
+      "coveredRecipients": [ "非洲", "埃及", "南非", "埃塞俄比亚", "尼日利亚" ]
+    },
+    {
+      "id": "egypt",
+      "label": "埃及",
+      "parentId": "africa",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "埃及" ]
+    },
+    {
+      "id": "south_africa",
+      "label": "南非",
+      "parentId": "africa",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "南非" ]
+    },
+    {
+      "id": "ethiopia",
+      "label": "埃塞俄比亚",
+      "parentId": "africa",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "埃塞俄比亚" ]
+    },
+    {
+      "id": "nigeria",
+      "label": "尼日利亚",
+      "parentId": "africa",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "尼日利亚" ]
+    },
+
+    {
+      "id": "north_america",
+      "label": "北美洲",
+      "parentId": "continent",
+      "level": 2,
+      "selectable": true,
+      "nodeType": "region",
+      "coveredRecipients": [ "北美洲", "美国", "加拿大", "墨西哥" ]
+    },
+    {
+      "id": "usa",
+      "label": "美国",
+      "parentId": "north_america",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "美国" ]
+    },
+    {
+      "id": "canada",
+      "label": "加拿大",
+      "parentId": "north_america",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "加拿大" ]
+    },
+    {
+      "id": "mexico",
+      "label": "墨西哥",
+      "parentId": "north_america",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "墨西哥" ]
+    },
+
+    {
+      "id": "south_america",
+      "label": "南美洲",
+      "parentId": "continent",
+      "level": 2,
+      "selectable": true,
+      "nodeType": "region",
+      "coveredRecipients": [ "南美洲", "巴西", "阿根廷", "智利", "秘鲁" ]
+    },
+    {
+      "id": "brazil",
+      "label": "巴西",
+      "parentId": "south_america",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "巴西" ]
+    },
+    {
+      "id": "argentina",
+      "label": "阿根廷",
+      "parentId": "south_america",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "阿根廷" ]
+    },
+    {
+      "id": "chile",
+      "label": "智利",
+      "parentId": "south_america",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "智利" ]
+    },
+    {
+      "id": "peru",
+      "label": "秘鲁",
+      "parentId": "south_america",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "秘鲁" ]
+    },
+
+    {
+      "id": "europe",
+      "label": "欧洲",
+      "parentId": "continent",
+      "level": 2,
+      "selectable": true,
+      "nodeType": "region",
+      "coveredRecipients": [ "欧洲", "英国", "法国", "德国", "意大利", "俄罗斯" ]
+    },
+    {
+      "id": "uk",
+      "label": "英国",
+      "parentId": "europe",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "英国" ]
+    },
+    {
+      "id": "france",
+      "label": "法国",
+      "parentId": "europe",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "法国" ]
+    },
+    {
+      "id": "germany",
+      "label": "德国",
+      "parentId": "europe",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "德国" ]
+    },
+    {
+      "id": "italy",
+      "label": "意大利",
+      "parentId": "europe",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "意大利" ]
+    },
+    {
+      "id": "russia",
+      "label": "俄罗斯",
+      "parentId": "europe",
+      "level": 3,
+      "selectable": true,
+      "nodeType": "direct",
+      "coveredRecipients": [ "俄罗斯" ]
+    },
+
+    {
+      "id": "organization",
+      "label": "国际组织",
+      "parentId": "",
+      "level": 1,
+      "selectable": false,
+      "nodeType": "category",
+      "coveredRecipients": []
+    },
+    {
+      "id": "asean",
+      "label": "东盟",
+      "parentId": "organization",
+      "level": 2,
+      "selectable": true,
+      "nodeType": "organization",
+      "coveredRecipients": [ "东盟", "泰国", "越南", "新加坡", "马来西亚", "印尼", "菲律宾", "文莱", "老挝", "缅甸", "柬埔寨" ]
+    },
+    {
+      "id": "un",
+      "label": "联合国",
+      "parentId": "organization",
+      "level": 2,
+      "selectable": true,
+      "nodeType": "organization",
+      "coveredRecipients": [ "联合国" ]
+    },
+    {
+      "id": "sco",
+      "label": "上合组织",
+      "parentId": "organization",
+      "level": 2,
+      "selectable": true,
+      "nodeType": "organization",
+      "coveredRecipients": [ "上合组织", "中国", "俄罗斯", "印度", "巴基斯坦", "哈萨克斯坦", "吉尔吉斯斯坦", "塔吉克斯坦", "乌兹别克斯坦", "伊朗" ]
+    }
+  ]
+}
