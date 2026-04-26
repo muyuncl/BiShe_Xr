@@ -46,13 +46,35 @@ public static class UIFlowControlBarGenerator
 
         var canvasGo = new GameObject(FlowCanvasName, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
         var canvas = canvasGo.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        // Quest 风格“总控 HUD”更推荐 World Space + 相机相对位姿锁定（运行时与预览一致）
+        canvas.renderMode = RenderMode.WorldSpace;
+        if (Camera.main != null)
+            canvas.worldCamera = Camera.main;
 
         var scaler = canvasGo.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+        scaler.dynamicPixelsPerUnit = 10f;
+
+        // 给一个“看起来像屏幕”的基准尺寸，配合缩放到世界空间
+        var rect = canvasGo.GetComponent<RectTransform>();
+        rect.sizeDelta = new Vector2(1920f, 1080f);
+        rect.localScale = Vector3.one * 0.001f; // 1920px -> 1.92m（大致可调）
+
+        // 自动补一个相机相对位姿锁定（如果用户没手动加）
+        if (canvasGo.GetComponent<XRRelativePlacement>() == null)
+        {
+            var rel = canvasGo.AddComponent<XRRelativePlacement>();
+            // 默认：略低于视线、向前 1.2m
+            var so = new SerializedObject(rel);
+            so.FindProperty("localPositionOffset").vector3Value = new Vector3(0f, -0.25f, 1.2f);
+            so.FindProperty("localEulerOffset").vector3Value = Vector3.zero;
+            so.FindProperty("applyOnStart").boolValue = true;
+            so.FindProperty("followContinuously").boolValue = true;
+            so.FindProperty("startDelayFrames").intValue = 2;
+            so.FindProperty("positionSmoothTime").floatValue = 0.06f;
+            so.FindProperty("rotationLerpSpeed").floatValue = 12f;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
         return canvas;
     }
 

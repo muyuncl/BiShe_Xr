@@ -4,9 +4,16 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 0
+    path: Assets/Samples/XR Hands/1.7.3/HandVisualizer/HandVisualizer.unity
+    guid: ab7acf0d9677fbe4db51bc36647d4fcb
+  - enabled: 1
+    path: Assets/Scenes/openxr test.unity
+    guid: 9ebc634d7e0af3f48af87cd5e579dc05
   m_configObjects:
     Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 476b1d09a3072ab439745adda0dc4ac9, type: 2}
+    com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: 7b42db323b811c740806b58f64a0b1b8, type: 2}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 850f4e11865cde54f9af3c399327eb7c, type: 2}
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 80dcd86afbc9b1342bc8a0f6b5cd87a0, type: 2}
     xr.sdk.mock-hmd.settings: {fileID: 11400000, guid: fe94e20811d01dd4788a1a565f6aaf84, type: 2}

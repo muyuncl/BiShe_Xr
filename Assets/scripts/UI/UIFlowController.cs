@@ -21,8 +21,10 @@ public class UIFlowController : MonoBehaviour
 
     [Header("流程门禁（可选）")]
     [SerializeField] private TextMeshProUGUI nextBlockHintText;
+    [SerializeField] private float navigationDebounceSeconds = 0.2f;
 
     private int currentPageIndex;
+    private float lastNavigateTime = -999f;
 
     public int CurrentPageIndex => currentPageIndex;
     public int PageCount => pageRoots.Count;
@@ -68,6 +70,9 @@ public class UIFlowController : MonoBehaviour
     /// </summary>
     public void GoNext()
     {
+        if (Time.unscaledTime - lastNavigateTime < Mathf.Max(0f, navigationDebounceSeconds))
+            return;
+        lastNavigateTime = Time.unscaledTime;
         ShowPage(currentPageIndex + 1);
     }
 
@@ -76,6 +81,9 @@ public class UIFlowController : MonoBehaviour
     /// </summary>
     public void GoBack()
     {
+        if (Time.unscaledTime - lastNavigateTime < Mathf.Max(0f, navigationDebounceSeconds))
+            return;
+        lastNavigateTime = Time.unscaledTime;
         ShowPage(currentPageIndex - 1);
     }
 
@@ -117,7 +125,8 @@ public class UIFlowController : MonoBehaviour
         bool hasPages = pageRoots != null && pageRoots.Count > 0;
         bool hasPrev = hasPages && currentPageIndex > 0;
         bool hasNextPage = hasPages && currentPageIndex < pageRoots.Count - 1;
-        bool canProceed = hasNextPage && CanProceedCurrentPage(out string blockReason);
+        string blockReason = string.Empty;
+        bool canProceed = hasNextPage && CanProceedCurrentPage(out blockReason);
 
         if (backButton != null)
             backButton.interactable = hasPrev;
