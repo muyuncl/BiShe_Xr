@@ -3,6 +3,7 @@ using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.XR.Interaction.Toolkit.UI;
 
 public static class FilterUIWorldSpaceGenerator
 {
@@ -13,6 +14,10 @@ public static class FilterUIWorldSpaceGenerator
         Undo.RegisterCreatedObjectUndo(canvasGo, "Generate World Space Filter UI");
         var canvas = canvasGo.GetComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
+        if (Camera.main != null)
+            canvas.worldCamera = Camera.main;
+        if (canvasGo.GetComponent<TrackedDeviceGraphicRaycaster>() == null)
+            canvasGo.AddComponent<TrackedDeviceGraphicRaycaster>();
         var canvasRect = canvasGo.GetComponent<RectTransform>();
         canvasRect.sizeDelta = new Vector2(1200, 1800);
         canvasRect.localScale = Vector3.one * 0.0012f;

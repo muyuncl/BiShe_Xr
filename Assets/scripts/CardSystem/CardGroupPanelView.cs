@@ -244,10 +244,10 @@ public class CardGroupPanelView : MonoBehaviour
         if (!string.IsNullOrEmpty(groupTitleOverride)) return groupTitleOverride;
         return groupType switch
         {
-            CardGroupType.GiftCards => "国礼卡组",
-            CardGroupType.CultureElements => "文化元素卡组",
-            CardGroupType.TargetCountryElements => "目标国家文化元素卡组",
-            CardGroupType.Taboos => "禁忌卡组",
+            CardGroupType.GiftCards => "过往国礼",
+            CardGroupType.CultureElements => "传统文化意象",
+            CardGroupType.TargetCountryElements => "异域文化意象",
+            CardGroupType.Taboos => "文化禁忌",
             _ => "卡组"
         };
     }

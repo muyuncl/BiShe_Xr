@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>模型生成 UI 交互原型</title>
+  <style>
+    :root {
+      --panel-bg: rgba(42, 42, 46, 0.92);
+      --panel-border: rgba(255, 255, 255, 0.09);
+      --text: #f4f4f6;
+      --muted: #9a9aa5;
+      --selected: rgba(255, 255, 255, 0.14);
+      --selected-border: rgba(255, 255, 255, 0.42);
+      --radius-panel: 18px;
+      --radius-thumb: 14px;
+      /* 低保真：左约 30% 宽、右约 10%、中间留白给生成区 */
+      --grid-left: minmax(252px, 30%);
+      --grid-right: minmax(76px, 10%);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: linear-gradient(168deg, #353842 0%, #22252c 42%, #16181d 100%);
+      overflow: hidden;
+    }
+
+    .viewport {
+      height: 100dvh;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      padding: clamp(10px, 1.8vh, 22px) clamp(10px, 1.5vw, 22px);
+    }
+
+    /* 列宽 30% : 1fr(~60%) : 10% */
+    .scene {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: var(--grid-left) minmax(0, 1fr) var(--grid-right);
+      column-gap: clamp(8px, 1.2vw, 20px);
+      align-items: stretch;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        overflow: auto;
+      }
+      .viewport {
+        height: auto;
+        min-height: 100dvh;
+      }
+      .scene {
+        grid-template-columns: 1fr;
+      }
+      .col-left {
+        align-items: stretch !important;
+      }
+      .left-stack {
+        height: auto !important;
+        max-height: none !important;
+      }
+      .col-right {
+        padding-bottom: 16px !important;
+        justify-content: flex-start !important;
+      }
+      .col-center {
+        min-height: 320px;
+        justify-content: center !important;
+      }
+    }
+
+    /* —— 左列：垂直居中，仅材质 —— */
+    .col-left {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: center;
+      min-height: 0;
+    }
+
+    .left-stack {
+      display: flex;
+      flex-direction: column;
+      gap: clamp(10px, 1.4vh, 14px);
+      height: min(88vh, 860px);
+      max-height: 88vh;
+      width: 100%;
+      min-height: 0;
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-panel);
+      padding: clamp(14px, 1.8vh, 18px) clamp(12px, 1vw, 16px);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 20px 56px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: clamp(14px, 1.25vw, 16px);
+      font-weight: 600;
+      text-align: center;
+      letter-spacing: 0.06em;
+    }
+
+    /* 左侧整块：材质纹理 */
+    .panel-material {
+      flex: 1 1 0;
+      min-height: 200px;
+    }
+
+    .material-strip {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 4px 2px 8px;
+      scroll-snap-type: x proximity;
+    }
+
+    .material-strip::-webkit-scrollbar {
+      height: 4px;
+    }
+    .material-strip::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+
+    .material-card {
+      flex: 0 0 auto;
+      /* 约一列宽的 0.28～0.32，保证一屏可见 ~3 个大方块 */
+      width: clamp(88px, 30%, 118px);
+      aspect-ratio: 1;
+      scroll-snap-align: start;
+      border-radius: var(--radius-thumb);
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(255, 255, 255, 0.06);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: background 0.12s, border-color 0.12s;
+    }
+
+    .material-card:hover {
+      background: rgba(255, 255, 255, 0.11);
+    }
+
+    .material-card.selected {
+      background: rgba(58, 58, 66, 0.98);
+      border-color: rgba(255, 255, 255, 0.38);
+    }
+
+    .material-thumb {
+      width: 100%;
+      flex: 1 1 0;
+      min-height: 0;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.22);
+      background-size: cover;
+      background-position: center;
+    }
+
+    .material-label {
+      flex-shrink: 0;
+      font-size: 9px;
+      color: var(--muted);
+      line-height: 1.15;
+      text-align: center;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* —— 中间：生成区靠中下（线框「中部偏下」） —— */
+    .col-center {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      min-width: 0;
+      min-height: 0;
+      padding: 0 clamp(6px, 1.5vw, 20px) clamp(28px, 7vh, 88px);
+    }
+
+    .stage-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: min(48vw, 400px);
+      max-width: 100%;
+    }
+
+    .model-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+    }
+
+    .vase-placeholder {
+      font-size: clamp(52px, 11vw, 88px);
+      line-height: 1;
+      filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.4));
+      z-index: 2;
+    }
+
+    .glow-ring {
+      width: min(68%, 200px);
+      height: 16px;
+      margin-top: -5px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.06) 58%, transparent 75%);
+      filter: blur(2px);
+    }
+
+    .paper-sketch {
+      width: 100%;
+      max-width: 260px;
+      aspect-ratio: 4 / 2.1;
+      margin-top: 8px;
+      border-radius: 3px;
+      background: linear-gradient(180deg, #f4f1ea, #e6e2d6);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.28);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .paper-sketch::after {
+      content: "";
+      position: absolute;
+      inset: 16% 20%;
+      border: 2px dashed rgba(30, 58, 95, 0.32);
+      border-radius: 42% 42% 36% 36% / 54% 54% 46% 46%;
+    }
+
+    /* 线稿：粗黑衬线标题感 */
+    .status-line {
+      margin-top: clamp(12px, 2vh, 20px);
+      font-family: Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
+      font-size: clamp(14px, 1.35vw, 17px);
+      font-weight: 700;
+      color: #121218;
+      text-align: center;
+      letter-spacing: 0.02em;
+      text-shadow: 0 0 1px rgba(255, 255, 255, 0.5), 0 1px 2px rgba(255, 255, 255, 0.35);
+      min-height: 1.4em;
+    }
+
+    .status-line.active {
+      color: #0a0a10;
+    }
+
+    .hint {
+      margin-top: 14px;
+      font-size: 10px;
+      color: var(--muted);
+      opacity: 0.55;
+      text-align: center;
+      line-height: 1.4;
+      max-width: 34em;
+    }
+
+    /* —— 右列：整体靠下（贴「桌面」），面板更矮、更窄 —— */
+    .col-right {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      padding-bottom: clamp(32px, 6.5vh, 96px);
+      min-height: 0;
+    }
+
+    .panel-actions {
+      width: 100%;
+      max-width: 112px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 8px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-panel);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(14px);
+    }
+
+    .action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      aspect-ratio: 1;
+      max-height: 104px;
+      padding: 8px 4px;
+      border-radius: 14px;
+      border: 1px solid var(--panel-border);
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text);
+      font-size: 10px;
+      line-height: 1.2;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.08s;
+      text-align: center;
+    }
+
+    .action-btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.11);
+    }
+
+    .action-btn:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    .action-btn:disabled {
+      opacity: 0.38;
+      cursor: not-allowed;
+    }
+
+    .action-btn.primary {
+      background: linear-gradient(180deg, #526ee6, #3e54c4);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .action-btn.primary:hover:not(:disabled) {
+      background: linear-gradient(180deg, #5f7aef, #4a5fd0);
+    }
+
+    .action-btn .icon {
+      width: 22px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+
+    footer.note {
+      flex-shrink: 0;
+      text-align: center;
+      font-size: 10px;
+      color: var(--muted);
+      opacity: 0.45;
+      padding-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="viewport">
+    <div class="scene">
+      <div class="col-left">
+        <div class="left-stack">
+          <section class="panel panel-material" aria-labelledby="mat-title">
+            <h2 id="mat-title">材质纹理</h2>
+            <div class="material-strip" id="materials" role="listbox" aria-label="材质选择"></div>
+          </section>
+        </div>
+      </div>
+
+      <main class="col-center">
+        <div class="stage-stack">
+          <div class="model-block">
+            <span class="vase-placeholder" title="占位：3D 模型">🏺</span>
+            <div class="glow-ring" aria-hidden="true"></div>
+            <div class="paper-sketch" aria-hidden="true"></div>
+          </div>
+          <p class="status-line" id="status">准备就绪</p>
+        </div>
+        <p class="hint">列宽约 30% / 60% / 10%；左侧仅材质横滑；右栏靠下、方块按钮。</p>
+      </main>
+
+      <aside class="col-right">
+        <div class="panel-actions">
+          <button type="button" class="action-btn" id="btn-library" disabled title="暂不实现">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="4" y="4" width="7" height="7" rx="1" />
+              <path d="M13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />
+            </svg>
+            加入模型库
+          </button>
+          <button type="button" class="action-btn primary" id="btn-generate">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 3v1M12 20v1M4 12h1M19 12h1" />
+              <path d="M6.5 6.5l.7.7M16.8 16.8l.7.7M6.5 17.2l.7-.7M16.8 7.2l.7-.7" />
+              <circle cx="12" cy="12" r="3.5" />
+            </svg>
+            生成
+          </button>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="note"><code>WebMockups/model-gen-ui/index.html</code></footer>
+  </div>
+
+  <script>
+    const CONFIG_MATERIALS = [
+      { id: "porcelain", name: "青花瓷", bg: "linear-gradient(145deg,#1e3a8a 0%,#3b5bdb 40%,#e8eef8 40%,#e8eef8 100%)" },
+      { id: "bronze", name: "铜胎", bg: "linear-gradient(160deg,#6b4f2e,#b8956c,#3d2a18)" },
+      { id: "wood", name: "原木", bg: "repeating-linear-gradient(90deg,#5c4033,#5c4033 4px,#4a3228 4px,#4a3228 8px)" },
+      { id: "jade", name: "玉质", bg: "radial-gradient(circle at 35% 30%,#d4f4e8,#2d6a4f)" },
+      { id: "matte", name: "哑光釉", bg: "linear-gradient(180deg,#6b7280,#9ca3af)" },
+    ];
+
+    const MOCK_GENERATION_STEPS = [
+      { text: "正在拍照...", ms: 600 },
+      { text: "正在上传图片到 ComfyUI...", ms: 800 },
+      { text: "正在提交 3D 生成任务...", ms: 600 },
+      { text: "模型生成中...", ms: 2000 },
+      { text: "正在查找生成的模型文件...", ms: 700 },
+      { text: "正在下载 GLB 模型文件...", ms: 900 },
+      { text: "正在加载 3D 模型...", ms: 800 },
+      { text: "3D 模型生成成功！", ms: 1200 },
+    ];
+
+    let selectedMat = 0;
+    let generating = false;
+
+    function renderMaterials() {
+      const el = document.getElementById("materials");
+      el.innerHTML = "";
+      CONFIG_MATERIALS.forEach((m, i) => {
+        const card = document.createElement("div");
+        card.className = "material-card" + (i === selectedMat ? " selected" : "");
+        card.setAttribute("role", "option");
+        const img = document.createElement("div");
+        img.className = "material-thumb";
+        img.style.backgroundImage = m.bg;
+        img.setAttribute("role", "img");
+        img.setAttribute("aria-label", m.name);
+        const lab = document.createElement("div");
+        lab.className = "material-label";
+        lab.textContent = m.name;
+        card.appendChild(img);
+        card.appendChild(lab);
+        card.addEventListener("click", () => {
+          selectedMat = i;
+          renderMaterials();
+        });
+        el.appendChild(card);
+      });
+    }
+
+    function setStatus(text) {
+      document.getElementById("status").textContent = text;
+    }
+
+    async function runMockGeneration() {
+      if (generating) return;
+      generating = true;
+      const btn = document.getElementById("btn-generate");
+      btn.disabled = true;
+
+      for (const step of MOCK_GENERATION_STEPS) {
+        setStatus(step.text);
+        await new Promise((r) => setTimeout(r, step.ms));
+      }
+
+      setStatus("准备就绪");
+      generating = false;
+      btn.disabled = false;
+    }
+
+    document.getElementById("btn-generate").addEventListener("click", runMockGeneration);
+
+    renderMaterials();
+  </script>
+</body>
+</html>

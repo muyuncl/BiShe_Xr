@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>World Space Glass · 参数预览（网页版）</title>
+  <style>
+    :root {
+      --panel: rgba(18, 20, 28, 0.35);
+      --border: rgba(255, 255, 255, 0.14);
+      --text: #e8eaef;
+      --muted: #9aa3b2;
+      --accent: #7dd3fc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #0b0d12;
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      overflow-x: hidden;
+    }
+    .wrap {
+      display: grid;
+      grid-template-columns: minmax(280px, 340px) 1fr;
+      min-height: 100vh;
+      gap: 0;
+    }
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; }
+    }
+    aside {
+      background: linear-gradient(180deg, #12151c 0%, #0e1016 100%);
+      border-right: 1px solid rgba(255,255,255,0.06);
+      padding: 1.25rem 1.25rem 2rem;
+      overflow-y: auto;
+    }
+    h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 0 0 0.35rem;
+      letter-spacing: 0.02em;
+    }
+    .sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+      margin-bottom: 1.25rem;
+    }
+    .group {
+      margin-bottom: 1rem;
+    }
+    .group h2 {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin: 0 0 0.5rem;
+      font-weight: 600;
+    }
+    label.row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+      margin-bottom: 0.35rem;
+    }
+    label.row span.val {
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+      min-width: 3.2rem;
+      text-align: right;
+      font-size: 0.78rem;
+    }
+    input[type="range"] {
+      width: 100%;
+      margin: 0.15rem 0 0.6rem;
+      accent-color: var(--accent);
+    }
+    .hint {
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-top: 1rem;
+      padding: 0.65rem 0.75rem;
+      background: rgba(125, 211, 252, 0.06);
+      border-radius: 8px;
+      border: 1px solid rgba(125, 211, 252, 0.12);
+    }
+    main {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    #stage {
+      position: relative;
+      width: min(92vw, 720px);
+      aspect-ratio: 16 / 10;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.55),
+        inset 0 0 0 1px rgba(255,255,255,0.06);
+    }
+    #bg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #glassLayer {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 52%;
+      height: 58%;
+      border-radius: 20px;
+      pointer-events: none;
+      box-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255,255,255,0.35);
+      border: 1px solid rgba(255,255,255,0.22);
+    }
+    #glassCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+    }
+    .badge {
+      position: absolute;
+      bottom: 10px;
+      right: 12px;
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 0.06em;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <aside>
+      <h1>毛玻璃参数（网页示意）</h1>
+      <p class="sub">
+        用 Canvas 近似 Unity 里 <code style="color:#b8c0cc">WorldSpaceGlassPanel</code> 的调节项。
+        与引擎内实机效果会有差别，仅用于快速看参数关系与范围。
+      </p>
+
+      <div class="group">
+        <h2>光（方向 + 强度）</h2>
+        <label class="row">方向 (°) <span class="val" id="vAngle">-51</span></label>
+        <input type="range" id="lightAngle" min="-180" max="180" step="1" value="-51" />
+        <label class="row">强度 (%) <span class="val" id="vLight">35</span></label>
+        <input type="range" id="lightPct" min="0" max="100" step="1" value="35" />
+      </div>
+
+      <div class="group">
+        <h2>折射</h2>
+        <label class="row">强度 (0–1) <span class="val" id="vRefr">0.12</span></label>
+        <input type="range" id="refraction" min="0" max="1" step="0.01" value="0.12" />
+      </div>
+
+      <div class="group">
+        <h2>深度感</h2>
+        <label class="row">视差放大 <span class="val" id="vDepth">0.35</span></label>
+        <input type="range" id="depth" min="0" max="2" step="0.01" value="0.35" />
+      </div>
+
+      <div class="group">
+        <h2>色散</h2>
+        <label class="row">RGB 分离 (0–10) <span class="val" id="vDisp">2.5</span></label>
+        <input type="range" id="dispersion" min="0" max="10" step="0.1" value="2.5" />
+      </div>
+
+      <div class="group">
+        <h2>磨砂</h2>
+        <label class="row">模糊 (%) <span class="val" id="vFrost">45</span></label>
+        <input type="range" id="frostPct" min="0" max="100" step="1" value="45" />
+      </div>
+
+      <div class="group">
+        <h2>扩散</h2>
+        <label class="row">采样扩散 <span class="val" id="vSplay">1.0</span></label>
+        <input type="range" id="splay" min="0" max="3" step="0.05" value="1" />
+      </div>
+
+      <div class="group">
+        <h2>底色 Tint</h2>
+        <label class="row">不透明度 <span class="val" id="vTintA">0.65</span></label>
+        <input type="range" id="tintA" min="0" max="1" step="0.01" value="0.65" />
+      </div>
+
+      <p class="hint">
+        打开方式：双击本 HTML，或用本地静态服务器。移动鼠标在画面上可轻微带动「折射」方向（示意视差）。
+      </p>
+    </aside>
+
+    <main>
+      <div id="stage">
+        <canvas id="bg" width="1440" height="900"></canvas>
+        <div id="glassLayer">
+          <canvas id="glassCanvas" width="400" height="440"></canvas>
+        </div>
+        <span class="badge">WEB PREVIEW · NOT UNITY</span>
+      </div>
+    </main>
+  </div>
+
+  <script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const bg = $("bg");
+  const gctx = bg.getContext("2d", { alpha: false });
+  const glass = $("glassCanvas");
+  const gx = glass.getContext("2d", { alpha: true });
+
+  const params = {
+    lightAngle: -51,
+    lightPct: 35,
+    refraction: 0.12,
+    depth: 0.35,
+    dispersion: 2.5,
+    frostPct: 45,
+    splay: 1,
+    tintA: 0.65,
+  };
+
+  let mouse = { x: 0.5, y: 0.5 };
+  const stage = $("stage");
+
+  function bindRange(id, key, fmt, elVal) {
+    const el = $(id);
+    el.addEventListener("input", () => {
+      params[key] = parseFloat(el.value);
+      $(elVal).textContent = fmt(params[key]);
+    });
+  }
+
+  bindRange("lightAngle", "lightAngle", (v) => String(Math.round(v)), "vAngle");
+  bindRange("lightPct", "lightPct", (v) => String(Math.round(v)), "vLight");
+  bindRange("refraction", "refraction", (v) => v.toFixed(2), "vRefr");
+  bindRange("depth", "depth", (v) => v.toFixed(2), "vDepth");
+  bindRange("dispersion", "dispersion", (v) => v.toFixed(1), "vDisp");
+  bindRange("frostPct", "frostPct", (v) => String(Math.round(v)), "vFrost");
+  bindRange("splay", "splay", (v) => v.toFixed(2), "vSplay");
+  bindRange("tintA", "tintA", (v) => v.toFixed(2), "vTintA");
+
+  stage.addEventListener("mousemove", (e) => {
+    const r = stage.getBoundingClientRect();
+    mouse.x = (e.clientX - r.left) / r.width;
+    mouse.y = (e.clientY - r.top) / r.height;
+  });
+
+  function fillRoundRect(ctx, x, y, w, h, rad) {
+    const r = Math.min(rad, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function strokeRoundRect(ctx, x, y, w, h, rad) {
+    const r = Math.min(rad, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  let t0 = performance.now();
+  function drawBackground(time) {
+    const w = bg.width, h = bg.height;
+    const t = (time - t0) * 0.001;
+
+    const g1 = gctx.createLinearGradient(0, 0, w, h);
+    g1.addColorStop(0, `hsl(${(t * 18) % 360}, 62%, 22%)`);
+    g1.addColorStop(0.45, `hsl(${(40 + t * 25) % 360}, 55%, 28%)`);
+    g1.addColorStop(1, `hsl(${(200 + t * 12) % 360}, 48%, 18%)`);
+    gctx.fillStyle = g1;
+    gctx.fillRect(0, 0, w, h);
+
+    // 几何与「景深」内容，便于看出折射/色散
+    gctx.save();
+    gctx.globalAlpha = 0.9;
+    for (let i = 0; i < 14; i++) {
+      const x = w * (0.08 + (i % 5) * 0.18 + Math.sin(t + i) * 0.02);
+      const y = h * (0.12 + Math.floor(i / 5) * 0.28 + Math.cos(t * 0.7 + i * 0.3) * 0.04);
+      const rw = 80 + (i * 13) % 90;
+      const rh = 50 + (i * 17) % 70;
+      gctx.fillStyle = `hsla(${(i * 47 + t * 30) % 360}, 70%, 55%, 0.85)`;
+      fillRoundRect(gctx, x, y, rw, rh, 12);
+      gctx.strokeStyle = "rgba(255,255,255,0.25)";
+      gctx.lineWidth = 2;
+      strokeRoundRect(gctx, x, y, rw, rh, 12);
+    }
+    gctx.restore();
+
+    // 细网格：色散更明显
+    gctx.save();
+    gctx.strokeStyle = "rgba(255,255,255,0.07)";
+    gctx.lineWidth = 1;
+    const step = 28;
+    for (let x = 0; x < w; x += step) {
+      gctx.beginPath();
+      gctx.moveTo(x, 0);
+      gctx.lineTo(x, h);
+      gctx.stroke();
+    }
+    for (let y = 0; y < h; y += step) {
+      gctx.beginPath();
+      gctx.moveTo(0, y);
+      gctx.lineTo(w, y);
+      gctx.stroke();
+    }
+    gctx.restore();
+  }
+
+  function bilinear(img, x, y, w, h) {
+    const x0 = Math.max(0, Math.min(w - 1, Math.floor(x)));
+    const y0 = Math.max(0, Math.min(h - 1, Math.floor(y)));
+    const x1 = Math.max(0, Math.min(w - 1, x0 + 1));
+    const y1 = Math.max(0, Math.min(h - 1, y0 + 1));
+    const fx = x - x0;
+    const fy = y - y0;
+    const i = (xx, yy) => (yy * w + xx) * 4;
+    const d = img.data;
+    const out = [0, 0, 0, 0];
+    for (let c = 0; c < 4; c++) {
+      const a = d[i(x0, y0) + c];
+      const b = d[i(x1, y0) + c];
+      const cc = d[i(x0, y1) + c];
+      const dd = d[i(x1, y1) + c];
+      out[c] = a * (1 - fx) * (1 - fy) + b * fx * (1 - fy) + cc * (1 - fx) * fy + dd * fx * fy;
+    }
+    return out;
+  }
+
+  function drawGlass(time) {
+    const bw = bg.width, bh = bg.height;
+    const gw = glass.width, gh = glass.height;
+
+    const img = gctx.getImageData(0, 0, bw, bh);
+
+    const depth = params.depth;
+    const splay = Math.max(0.05, params.splay);
+    const refrPx = params.refraction * 42 * (1 + depth) * (0.85 + (mouse.x - 0.5) * 0.3);
+    const refrPy = params.refraction * 28 * (1 + depth) * (0.85 + (mouse.y - 0.5) * 0.3);
+
+    const rad = (params.lightAngle * Math.PI) / 180;
+    const dirX = Math.cos(rad);
+    const dirY = Math.sin(rad);
+    const dispPx = (params.dispersion / 10) * 14 * splay * (1 + depth * 0.5);
+
+    const frost = (params.frostPct / 100) * 6.5 * splay;
+    const frostR = Math.max(0, Math.round(frost));
+
+    const rect = glass.getBoundingClientRect();
+    const stageRect = stage.getBoundingClientRect();
+    const scaleX = bw / stageRect.width;
+    const scaleY = bh / stageRect.height;
+    const gx0 = (rect.left - stageRect.left) * scaleX;
+    const gy0 = (rect.top - stageRect.top) * scaleY;
+    const gx1 = (rect.right - stageRect.left) * scaleX;
+    const gy1 = (rect.bottom - stageRect.top) * scaleY;
+    const cx = (gx0 + gx1) * 0.5;
+    const cy = (gy0 + gy1) * 0.5;
+
+    const out = gx.createImageData(gw, gh);
+
+    for (let j = 0; j < gh; j++) {
+      for (let i = 0; i < gw; i++) {
+        const u = i / (gw - 1);
+        const v = j / (gh - 1);
+        const sx = gx0 + (gx1 - gx0) * u;
+        const sy = gy0 + (gy1 - gy0) * v;
+
+        let accR = 0, accG = 0, accB = 0, accA = 0, count = 0;
+        const taps = frostR <= 0 ? [[0, 0]] : [];
+        if (frostR > 0) {
+          for (let dy = -frostR; dy <= frostR; dy++)
+            for (let dx = -frostR; dx <= frostR; dx++)
+              if (dx * dx + dy * dy <= frostR * frostR + 0.5)
+                taps.push([dx, dy]);
+        }
+        for (const [ox, oy] of taps) {
+          const bx = sx - refrPx + ox;
+          const by = sy - refrPy + oy;
+
+          const sxR = bx + dirX * dispPx * 1.15;
+          const syR = by + dirY * dispPx * 1.15;
+          const sxG = bx;
+          const syG = by;
+          const sxB = bx - dirX * dispPx * 1.15;
+          const syB = by - dirY * dispPx * 1.15;
+
+          const cR = bilinear(img, sxR, syR, bw, bh);
+          const cG = bilinear(img, sxG, syG, bw, bh);
+          const cB = bilinear(img, sxB, syB, bw, bh);
+          accR += cR[0];
+          accG += cG[1];
+          accB += cB[2];
+          accA += (cR[3] + cG[3] + cB[3]) / 3;
+          count++;
+        }
+        const n = Math.max(1, count);
+        const r = accR / n;
+        const g = accG / n;
+        const bch = accB / n;
+        const a = Math.min(255, accA / n * 1.05);
+
+        // 镜面高光（与法线、视角简化模型）
+        const nx = (u - 0.5) * 2;
+        const ny = (v - 0.5) * 2;
+        const nz = 0.75;
+        const len = Math.hypot(nx, ny, nz);
+        const nnx = nx / len, nny = ny / len, nnz = nz / len;
+        const lx = Math.cos(rad) * 0.6;
+        const ly = Math.sin(rad) * 0.6;
+        const lz = 0.55;
+        const ll = Math.hypot(lx, ly, lz);
+        const h = Math.max(0, nnx * (lx / ll) + nny * (ly / ll) + nnz * (lz / ll));
+        const spec = Math.pow(h, 38) * (params.lightPct / 100) * 2.2;
+
+        const ti = (j * gw + i) * 4;
+        const tint = params.tintA;
+        out.data[ti] = Math.min(255, r * (1 - tint * 0.25) + spec * 255 + 255 * tint * 0.12);
+        out.data[ti + 1] = Math.min(255, g * (1 - tint * 0.2) + spec * 255 + 255 * tint * 0.14);
+        out.data[ti + 2] = Math.min(255, bch * (1 - tint * 0.15) + spec * 255 + 255 * tint * 0.18);
+        out.data[ti + 3] = Math.floor(255 * (0.15 + tint * 0.72));
+      }
+    }
+
+    gx.putImageData(out, 0, 0);
+
+    // 边缘高光条
+    gx.save();
+    gx.globalCompositeOperation = "lighter";
+    const grd = gx.createLinearGradient(0, 0, gw, gh);
+    const hi = params.lightPct / 100;
+    grd.addColorStop(0, `rgba(255,255,255,${0.08 * hi})`);
+    grd.addColorStop(0.5, "rgba(255,255,255,0)");
+    grd.addColorStop(1, `rgba(200,230,255,${0.12 * hi})`);
+    gx.fillStyle = grd;
+    gx.fillRect(0, 0, gw, gh);
+    gx.restore();
+  }
+
+  function frame(time) {
+    drawBackground(time);
+    drawGlass(time);
+    requestAnimationFrame(frame);
+  }
+
+  function resizeGlassCanvas() {
+    const r = glass.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(120, Math.round(r.width * dpr));
+    const h = Math.max(120, Math.round(r.height * dpr));
+    if (glass.width !== w || glass.height !== h) {
+      glass.width = w;
+      glass.height = h;
+    }
+  }
+
+  window.addEventListener("resize", () => {
+    const r = stage.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    bg.width = Math.round(r.width * dpr);
+    bg.height = Math.round(r.height * dpr);
+    resizeGlassCanvas();
+  });
+
+  window.dispatchEvent(new Event("resize"));
+  requestAnimationFrame(frame);
+})();
+  </script>
+</body>
+</html>

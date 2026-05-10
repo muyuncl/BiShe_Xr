@@ -18,6 +18,10 @@ public class XRPassthroughToggleController : MonoBehaviour
     [Tooltip("拖入实际负责透传的组件（例如 OVRPassthroughLayer）。")]
     [SerializeField] private Behaviour passthroughBehaviour;
 
+    [Header("平滑切换（可选）")]
+    [Tooltip("若指定，则按钮触发 VR/MR 渐变而非瞬间开关 passthroughBehaviour。")]
+    [SerializeField] private PassthroughVRMRFader smoothPassthroughFader;
+
     [Header("可选：切换时显隐对象")]
     [SerializeField] private GameObject[] hideWhenPassthroughOn;
     [SerializeField] private GameObject[] showWhenPassthroughOn;
@@ -36,16 +40,60 @@ public class XRPassthroughToggleController : MonoBehaviour
             toggleButton.onClick.AddListener(TogglePassthrough);
         }
 
-        SetPassthrough(startPassthroughOn);
+        if (smoothPassthroughFader != null)
+            smoothPassthroughFader.MixedRealityActiveChanged.AddListener(OnSmoothPassthroughFinished);
+
+        if (smoothPassthroughFader == null)
+            SetPassthrough(startPassthroughOn);
+    }
+
+    private void Start()
+    {
+        if (smoothPassthroughFader == null)
+            return;
+
+        smoothPassthroughFader.SmoothSetMixedReality(startPassthroughOn);
+        if (smoothPassthroughFader.IsMixedRealityActive == startPassthroughOn)
+            OnSmoothPassthroughFinished(smoothPassthroughFader.IsMixedRealityActive);
+    }
+
+    private void OnDestroy()
+    {
+        if (smoothPassthroughFader != null)
+            smoothPassthroughFader.MixedRealityActiveChanged.RemoveListener(OnSmoothPassthroughFinished);
+    }
+
+    private void OnSmoothPassthroughFinished(bool mixedRealityActive)
+    {
+        isPassthroughOn = mixedRealityActive;
+        ApplyActiveState(hideWhenPassthroughOn, !isPassthroughOn);
+        ApplyActiveState(showWhenPassthroughOn, isPassthroughOn);
+        if (stateText != null)
+            stateText.text = isPassthroughOn ? onText : offText;
+
+        if (passthroughBehaviour != null)
+            passthroughBehaviour.enabled = isPassthroughOn;
     }
 
     public void TogglePassthrough()
     {
+        if (smoothPassthroughFader != null)
+        {
+            smoothPassthroughFader.ToggleSmooth();
+            return;
+        }
+
         SetPassthrough(!isPassthroughOn);
     }
 
     public void SetPassthrough(bool enabledState)
     {
+        if (smoothPassthroughFader != null)
+        {
+            smoothPassthroughFader.SmoothSetMixedReality(enabledState);
+            return;
+        }
+
         isPassthroughOn = enabledState;
 
         if (passthroughBehaviour != null)

@@ -1,10 +1,15 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 /// <summary>
 /// ComfyUI API 通信客户端
@@ -22,79 +27,73 @@ public class ComfyUIClient : MonoBehaviour
 
     [Header("ComfyUI 设置")]
     [Tooltip("ComfyUI服务器地址")]
-    public string serverUrl = "http://192.168.1.100:8188";
+    public string serverUrl = "http://127.0.0.1:8188";
     
     [Tooltip("ComfyUI输出目录的绝对路径")]
     public string outputDirectory = @"D:\comfyui\ComfyUI-aki-v3\ComfyUI\output";
 
-    // 工作流JSON模板（输出GLB格式）
-    private const string WORKFLOW_TEMPLATE = @"{
-  ""12"": {
-    ""inputs"": {
-      ""geometry_resolution"": 256,
-      ""threshold"": 25,
-      ""model"": [""14"", 0],
-      ""reference_image"": [""17"", 0],
-      ""reference_mask"": [""17"", 1]
-    },
-    ""class_type"": ""TripoSRSampler""
-  },
-  ""14"": {
-    ""inputs"": {
-      ""model"": ""triposrmodel.ckpt"",
-      ""chunk_size"": 8192
-    },
-    ""class_type"": ""TripoSRModelLoader""
-  },
-  ""17"": {
-    ""inputs"": {
-      ""rembg_session"": [""18"", 0],
-      ""image"": [""23"", 0]
-    },
-    ""class_type"": ""ImageRemoveBackground+""
-  },
-  ""18"": {
-    ""inputs"": {
-      ""model"": ""u2net: general purpose"",
-      ""providers"": ""CUDA""
-    },
-    ""class_type"": ""RemBGSession+""
-  },
-  ""23"": {
-    ""inputs"": {
-      ""image"": ""{IMAGE_NAME}""
-    },
-    ""class_type"": ""LoadImage""
-  },
-  ""26"": {
-    ""inputs"": {
-      ""filename_prefix"": ""unity_output"",
-      ""mesh"": [""12"", 0]
-    },
-    ""class_type"": ""Save Mesh as GLB""
-  }
-}";
+    [Header("API 工作流（火山 + Tripo 双图）")]
+    [Tooltip("ComfyUI 导出的 API 格式 JSON（.json TextAsset）。仅运行时会改写其中两个 LoadImage 的 image 文件名。")]
+    public TextAsset workflowApiJson;
+
+    [Tooltip("线稿 LoadImage 节点 ID（API JSON 中的 key）")]
+    public string sketchLoadImageNodeId = "59";
+
+    [Tooltip("材质参考 LoadImage 节点 ID")]
+    public string materialLoadImageNodeId = "61";
+
+    private void Awake()
+    {
+#if UNITY_EDITOR
+        if (workflowApiJson == null)
+        {
+            workflowApiJson = AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Workflows/ComfySketchToModelApi.json");
+        }
+#endif
+    }
+
+    private void Reset()
+    {
+#if UNITY_EDITOR
+        if (workflowApiJson == null)
+            workflowApiJson = AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Workflows/ComfySketchToModelApi.json");
+#endif
+    }
 
     /// <summary>
-    /// 上传图片到ComfyUI
+    /// 上传图片到 ComfyUI input；fileName 须含扩展名，mime 与内容一致。
     /// </summary>
-    public IEnumerator UploadImage(byte[] imageData, Action<string> onSuccess, Action<string> onError)
+    public IEnumerator UploadImage(byte[] imageData, string fileName, string mimeType, Action<string> onSuccess, Action<string> onError)
     {
-        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        string fileName = $"unity_photo_{timestamp}.png";
+        if (imageData == null || imageData.Length == 0)
+        {
+            onError?.Invoke("上传失败：图片数据为空");
+            yield break;
+        }
+
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            onError?.Invoke("上传失败：文件名为空");
+            yield break;
+        }
 
         List<IMultipartFormSection> formData = new List<IMultipartFormSection>();
-        formData.Add(new MultipartFormFileSection("image", imageData, fileName, "image/png"));
+        formData.Add(new MultipartFormFileSection("image", imageData, fileName, mimeType));
 
         using (UnityWebRequest request = UnityWebRequest.Post($"{serverUrl}/upload/image", formData))
         {
-            request.timeout = 30;
+            request.timeout = 60;
             yield return request.SendWebRequest();
 
             if (request.result == UnityWebRequest.Result.Success)
             {
-                Debug.Log($"图片上传成功: {fileName}");
-                onSuccess?.Invoke(fileName);
+                string response = request.downloadHandler.text;
+                string usedName = fileName;
+                if (TryParseUploadResponseName(response, out string serverName) && !string.IsNullOrEmpty(serverName))
+                    usedName = serverName;
+
+                Debug.Log($"图片上传成功: {usedName}");
+                onSuccess?.Invoke(usedName);
             }
             else
             {
@@ -106,24 +105,65 @@ public class ComfyUIClient : MonoBehaviour
     }
 
     /// <summary>
-    /// 提交工作流任务到ComfyUI
+    /// 上传 PNG（默认草图）
     /// </summary>
-    public IEnumerator QueuePrompt(string imageName, Action<string> onSuccess, Action<string> onError)
+    public IEnumerator UploadImage(byte[] imageData, Action<string> onSuccess, Action<string> onError)
     {
-        // 替换工作流中的图片名称
-        string workflow = WORKFLOW_TEMPLATE.Replace("{IMAGE_NAME}", imageName);
+        string fileName = $"unity_photo_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+        yield return UploadImage(imageData, fileName, "image/png", onSuccess, onError);
+    }
 
-        // 构建prompt请求体
-        string promptJson = $"{{\"prompt\": {workflow}}}";
+    /// <summary>
+    /// 仅替换两个 LoadImage 的 image 文件名，其余节点（含提示词、种子）保持 TextAsset 原样。
+    /// </summary>
+    public IEnumerator QueuePromptDualLoadImages(string sketchUploadedName, string materialUploadedName, Action<string> onSuccess, Action<string> onError)
+    {
+        if (workflowApiJson == null || string.IsNullOrWhiteSpace(workflowApiJson.text))
+        {
+            onError?.Invoke("未配置 workflowApiJson（请拖入 ComfySketchToModelApi.json 或你的 API 导出）");
+            yield break;
+        }
 
-        byte[] bodyRaw = Encoding.UTF8.GetBytes(promptJson);
+        if (string.IsNullOrWhiteSpace(sketchUploadedName) || string.IsNullOrWhiteSpace(materialUploadedName))
+        {
+            onError?.Invoke("草图或材质上传文件名为空");
+            yield break;
+        }
+
+        JObject workflow;
+        try
+        {
+            workflow = JObject.Parse(workflowApiJson.text);
+        }
+        catch (Exception e)
+        {
+            onError?.Invoke($"解析工作流 JSON 失败: {e.Message}");
+            yield break;
+        }
+
+        StripMetaRecursive(workflow);
+
+        if (!TrySetLoadImageFileName(workflow, sketchLoadImageNodeId, sketchUploadedName, out string errSketch))
+        {
+            onError?.Invoke(errSketch);
+            yield break;
+        }
+
+        if (!TrySetLoadImageFileName(workflow, materialLoadImageNodeId, materialUploadedName, out string errMat))
+        {
+            onError?.Invoke(errMat);
+            yield break;
+        }
+
+        var body = new JObject { ["prompt"] = workflow };
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(body.ToString(Formatting.None));
 
         using (UnityWebRequest request = new UnityWebRequest($"{serverUrl}/prompt", "POST"))
         {
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
             request.downloadHandler = new DownloadHandlerBuffer();
             request.SetRequestHeader("Content-Type", "application/json");
-            request.timeout = 30;
+            request.timeout = 60;
 
             yield return request.SendWebRequest();
 
@@ -133,22 +173,74 @@ public class ComfyUIClient : MonoBehaviour
                 Debug.Log($"任务提交成功: {response}");
                 string promptId = ExtractPromptId(response);
                 if (!string.IsNullOrEmpty(promptId))
-                {
                     onSuccess?.Invoke(promptId);
-                }
                 else
-                {
-                    string error = $"任务提交成功但未解析到 prompt_id，响应: {response}";
-                    Debug.LogError(error);
-                    onError?.Invoke(error);
-                }
+                    onError?.Invoke($"任务提交成功但未解析到 prompt_id，响应: {response}");
             }
             else
             {
-                string error = $"任务提交失败: {request.error}";
-                Debug.LogError(error);
-                onError?.Invoke(error);
+                string err = $"任务提交失败: {request.error}\n{request.downloadHandler?.text}";
+                Debug.LogError(err);
+                onError?.Invoke(err);
             }
+        }
+    }
+
+    private static void StripMetaRecursive(JToken token)
+    {
+        if (token is JObject obj)
+        {
+            obj.Remove("_meta");
+            foreach (var p in obj.Properties().ToList())
+                StripMetaRecursive(p.Value);
+        }
+        else if (token is JArray arr)
+        {
+            foreach (var item in arr)
+                StripMetaRecursive(item);
+        }
+    }
+
+    private static bool TrySetLoadImageFileName(JObject workflow, string nodeId, string fileName, out string error)
+    {
+        error = null;
+        if (!workflow.TryGetValue(nodeId, out JToken nodeTok) || nodeTok is not JObject node)
+        {
+            error = $"工作流中缺少节点 {nodeId}";
+            return false;
+        }
+
+        if (node["class_type"]?.ToString() != "LoadImage")
+        {
+            error = $"节点 {nodeId} 不是 LoadImage";
+            return false;
+        }
+
+        var inputs = node["inputs"] as JObject;
+        if (inputs == null)
+        {
+            error = $"节点 {nodeId} 无 inputs";
+            return false;
+        }
+
+        inputs["image"] = fileName;
+        return true;
+    }
+
+    private static bool TryParseUploadResponseName(string responseJson, out string name)
+    {
+        name = null;
+        if (string.IsNullOrWhiteSpace(responseJson))
+            return false;
+        try
+        {
+            var o = JObject.Parse(responseJson);
+            name = o["name"]?.ToString();
+            return !string.IsNullOrEmpty(name);
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -362,12 +454,13 @@ public class ComfyUIClient : MonoBehaviour
     private string BuildConnectionHint(string requestError)
     {
         string baseMsg = $"地址: {serverUrl}\n错误: {requestError}";
-        if (IsLoopbackUrl(serverUrl))
+        bool isAndroid = Application.platform == RuntimePlatform.Android;
+        if (IsLoopbackUrl(serverUrl) && isAndroid)
         {
             return $"{baseMsg}\n检测到你在使用 localhost/127.0.0.1。Quest 真机请改成电脑局域网 IP，例如 http://192.168.1.100:8188";
         }
 
-        return $"{baseMsg}\n请确认：1) Quest 与电脑同一局域网；2) ComfyUI 正在运行；3) 防火墙放行 8188 端口。";
+        return $"{baseMsg}\n请确认：1) ComfyUI 正在运行；2) 端口 8188 可访问；3) serverUrl 与当前运行环境匹配。";
     }
 
     private static bool IsLoopbackUrl(string url)
@@ -448,6 +541,21 @@ public class ComfyUIClient : MonoBehaviour
                                 return true;
                             }
                         }
+                    }
+
+                    // Tripo 等节点可能直接输出 .glb 路径字符串
+                    foreach (var child in nodeOutput.Properties())
+                    {
+                        if (child.Value?.Type != JTokenType.String) continue;
+                        string s = child.Value.ToString();
+                        if (string.IsNullOrEmpty(s) || !s.EndsWith(".glb", StringComparison.OrdinalIgnoreCase)) continue;
+                        fileInfo = new ComfyGeneratedFileInfo
+                        {
+                            filename = System.IO.Path.GetFileName(s),
+                            subfolder = "",
+                            type = "output"
+                        };
+                        return true;
                     }
                 }
             }

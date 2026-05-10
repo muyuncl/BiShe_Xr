@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -54,8 +56,20 @@ public class VRPhotoTo3DController : MonoBehaviour
     [Tooltip("按空格键测试拍照（非VR模式调试用）")]
     public bool enableKeyboardTest = true;
 
+    [Header("草图调试（跳过拍照）")]
+    [Tooltip("勾选后不调用摄像头，改用下方本地文件或纹理作为草图上传 ComfyUI")]
+    public bool useDebugSketchFromLocal;
+
+    [Tooltip("本地图片绝对路径，例如 D:/shots/sketch.png（优先于下方纹理）")]
+    public string debugSketchAbsolutePath;
+
+    [Tooltip("路径为空时使用；不可读贴图会通过 RenderTexture 拷一份再导出 PNG")]
+    public Texture2D debugSketchTexture;
+
     private bool isGenerating = false;
     private GameObject currentModel;
+    private string selectedMaterialName;
+    private Texture2D selectedMaterialReference;
 
     private void Start()
     {
@@ -135,6 +149,13 @@ public class VRPhotoTo3DController : MonoBehaviour
         StartCoroutine(GenerateModelFromPhoto());
     }
 
+    public void SetSelectedMaterialReference(string materialName, Texture2D referenceImage)
+    {
+        selectedMaterialName = materialName;
+        selectedMaterialReference = referenceImage;
+        LogDebug($"🎨 已选择材质: {selectedMaterialName}, 参考图: {(selectedMaterialReference != null ? "已配置" : "未配置")}");
+    }
+
     /// <summary>
     /// 完整的生成流程协程
     /// </summary>
@@ -149,48 +170,100 @@ public class VRPhotoTo3DController : MonoBehaviour
         if (loadingPanel != null)
             loadingPanel.SetActive(true);
 
-        // ========== 步骤1: 拍照 ==========
-        UpdateStatus("正在拍照...");
-        LogDebug("📷 [步骤1/7] 开始拍照");
-
+        // ========== 步骤1: 草图（拍照或调试本地图） ==========
         byte[] photoData = null;
-        yield return webcamCapture.TakePhotoAsync((data) => { photoData = data; });
 
-        if (photoData == null)
+        if (useDebugSketchFromLocal)
         {
-            UpdateStatus("拍照失败！");
-            LogDebug("❌ 拍照失败！请检查摄像头是否可用");
+            UpdateStatus("调试模式：加载本地草图...");
+            LogDebug("📂 [步骤1/7] 调试模式：跳过拍照，使用本地草图");
+            photoData = TryLoadDebugSketchBytes();
+            if (photoData == null)
+            {
+                UpdateStatus("调试草图读取失败（检查路径或纹理）");
+                LogDebug("❌ 调试草图读取失败：请填写有效绝对路径，或指定 Texture2D");
+                yield return new WaitForSeconds(2f);
+                FinishGeneration();
+                yield break;
+            }
+
+            LogDebug($"✅ 本地草图载入成功！大小: {photoData.Length / 1024}KB ({photoData.Length} bytes)");
+            yield return null;
+        }
+        else
+        {
+            UpdateStatus("正在拍照...");
+            LogDebug("📷 [步骤1/7] 开始拍照");
+            yield return webcamCapture.TakePhotoAsync((data) => { photoData = data; });
+
+            if (photoData == null)
+            {
+                UpdateStatus("拍照失败！");
+                LogDebug("❌ 拍照失败！请检查摄像头是否可用");
+                yield return new WaitForSeconds(2f);
+                FinishGeneration();
+                yield break;
+            }
+
+            LogDebug($"✅ 拍照成功！图片大小: {photoData.Length / 1024}KB ({photoData.Length} bytes)");
+        }
+
+        if (selectedMaterialReference == null)
+        {
+            UpdateStatus("请先选择材质（需要材质参考图）");
+            LogDebug("❌ 未选择材质：请在材质栏选择一项后再生成");
             yield return new WaitForSeconds(2f);
             FinishGeneration();
             yield break;
         }
 
-        LogDebug($"✅ 拍照成功！图片大小: {photoData.Length / 1024}KB ({photoData.Length} bytes)");
+        byte[] materialBytes = TextureToPngBytes(selectedMaterialReference);
+        if (materialBytes == null || materialBytes.Length == 0)
+        {
+            UpdateStatus("材质参考图无法编码为图片");
+            LogDebug("❌ 材质 Texture2D 转 PNG 失败");
+            yield return new WaitForSeconds(2f);
+            FinishGeneration();
+            yield break;
+        }
 
-        // ========== 步骤2: 上传图片 ==========
-        UpdateStatus("正在上传图片到ComfyUI...");
-        LogDebug("📤 [步骤2/7] 开始上传图片到ComfyUI");
-        
-        string uploadedFileName = null;
-        bool uploadSuccess = false;
+        // ========== 步骤2: 上传草图与材质图（仅替换 API 中两个 LoadImage） ==========
+        UpdateStatus("正在上传草图与材质图到ComfyUI...");
+        LogDebug("📤 [步骤2/7] 上传草图与材质参考图");
+
+        string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        string sketchFile = $"unity_sketch_{stamp}.png";
+        string materialFile = $"unity_material_{stamp}.png";
+
+        string sketchUploadedName = null;
+        string materialUploadedName = null;
+        bool sketchOk = false;
+        bool materialOk = false;
 
         yield return comfyUIClient.UploadImage(
             photoData,
-            (fileName) => 
-            { 
-                uploadedFileName = fileName;
-                uploadSuccess = true;
-                LogDebug($"✅ 图片上传成功！文件名: {fileName}");
-            },
-            (error) => 
-            { 
-                UpdateStatus($"上传失败: {error}");
-                LogDebug($"❌ 上传失败: {error}");
-                uploadSuccess = false;
-            }
+            sketchFile,
+            "image/png",
+            (name) => { sketchUploadedName = name; sketchOk = true; LogDebug($"✅ 草图已上传: {name}"); },
+            (error) => { UpdateStatus($"草图上传失败: {error}"); LogDebug($"❌ {error}"); sketchOk = false; }
         );
 
-        if (!uploadSuccess)
+        if (!sketchOk)
+        {
+            yield return new WaitForSeconds(3f);
+            FinishGeneration();
+            yield break;
+        }
+
+        yield return comfyUIClient.UploadImage(
+            materialBytes,
+            materialFile,
+            "image/png",
+            (name) => { materialUploadedName = name; materialOk = true; LogDebug($"✅ 材质图已上传: {name}"); },
+            (error) => { UpdateStatus($"材质图上传失败: {error}"); LogDebug($"❌ {error}"); materialOk = false; }
+        );
+
+        if (!materialOk)
         {
             yield return new WaitForSeconds(3f);
             FinishGeneration();
@@ -199,13 +272,14 @@ public class VRPhotoTo3DController : MonoBehaviour
 
         // ========== 步骤3: 提交工作流 ==========
         UpdateStatus("正在提交3D生成任务...");
-        LogDebug("🚀 [步骤3/7] 提交工作流到ComfyUI");
+        LogDebug("🚀 [步骤3/7] 提交工作流到ComfyUI（仅替换线稿/材质文件名）");
         
         bool queueSuccess = false;
         string promptId = null;
 
-        yield return comfyUIClient.QueuePrompt(
-            uploadedFileName,
+        yield return comfyUIClient.QueuePromptDualLoadImages(
+            sketchUploadedName,
+            materialUploadedName,
             (queuedPromptId) => 
             { 
                 queueSuccess = true;
@@ -431,6 +505,60 @@ public class VRPhotoTo3DController : MonoBehaviour
         {
             Debug.Log($"[PhotoTo3D] {message}");
         }
+    }
+
+    /// <summary>
+    /// 调试模式：从磁盘路径（优先）或 Texture2D 得到 PNG/JPEG 等原始字节；纹理会导出为 PNG。
+    /// </summary>
+    private byte[] TryLoadDebugSketchBytes()
+    {
+        if (!string.IsNullOrWhiteSpace(debugSketchAbsolutePath))
+        {
+            var path = debugSketchAbsolutePath.Trim().Trim('"');
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    LogDebug($"❌ 调试草图文件不存在: {path}");
+                    return null;
+                }
+
+                return File.ReadAllBytes(path);
+            }
+            catch (Exception e)
+            {
+                LogDebug($"❌ 读取调试草图失败: {e.Message}");
+                return null;
+            }
+        }
+
+        if (debugSketchTexture != null)
+            return TextureToPngBytes(debugSketchTexture);
+
+        LogDebug("❌ 未配置调试草图：路径为空且 debugSketchTexture 为空");
+        return null;
+    }
+
+    private static byte[] TextureToPngBytes(Texture2D src)
+    {
+        if (src == null)
+            return null;
+
+        if (src.isReadable)
+            return src.EncodeToPNG();
+
+        var rt = RenderTexture.GetTemporary(src.width, src.height, 0, RenderTextureFormat.ARGB32);
+        Graphics.Blit(src, rt);
+        var prev = RenderTexture.active;
+        RenderTexture.active = rt;
+        var copy = new Texture2D(src.width, src.height, TextureFormat.RGB24, false);
+        copy.ReadPixels(new Rect(0, 0, src.width, src.height), 0, 0);
+        copy.Apply();
+        RenderTexture.active = prev;
+        RenderTexture.ReleaseTemporary(rt);
+        var png = copy.EncodeToPNG();
+        UnityEngine.Object.Destroy(copy);
+        return png;
     }
 
     /// <summary>
