@@ -39,6 +39,7 @@ Shader "BiShe/PassthroughVRMRFader"
             struct v2f
             {
                 float2 uv : TEXCOORD0;
+                float3 localDir : TEXCOORD1;
                 float4 vertex : SV_POSITION;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -55,6 +56,7 @@ Shader "BiShe/PassthroughVRMRFader"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
+                o.localDir = normalize(v.vertex.xyz);
                 return o;
             }
 
@@ -85,6 +87,12 @@ Shader "BiShe/PassthroughVRMRFader"
                 else if (_FadeDirection == 3)
                 {
                     fadeFactor = 1.0f - distance_from_center;
+                }
+                else if (_FadeDirection == 4)
+                {
+                    // Front -> Back : localDir.z = +1 (front), -1 (back)
+                    float z01 = saturate((i.localDir.z + 1.0f) * 0.5f);
+                    fadeFactor = 1.0f - z01;
                 }
 
                 col.a *= smoothstep(dissolveThreshold - edgeWidth, dissolveThreshold + edgeWidth, fadeFactor);

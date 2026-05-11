@@ -16,6 +16,7 @@ public sealed class PassthroughVRMRFader : MonoBehaviour
         RightToLeft = 1,
         TopToBottom = 2,
         InsideOut = 3,
+        FrontToBack = 4,
     }
 
     private const float AlphaTolerance = 0.001f;
@@ -31,7 +32,7 @@ public sealed class PassthroughVRMRFader : MonoBehaviour
 
     [Header("Fade")]
     [SerializeField] private float fadeSpeed = 1f;
-    [SerializeField] private FadeDirectionStyle fadeDirection = FadeDirectionStyle.TopToBottom;
+    [SerializeField] private FadeDirectionStyle fadeDirection = FadeDirectionStyle.FrontToBack;
     [SerializeField] private bool startInMixedReality;
 
     [Tooltip("若透视层迟迟未触发 resumed（例如部分编辑器环境），在此秒数后开始淡入。")]
@@ -105,13 +106,7 @@ public sealed class PassthroughVRMRFader : MonoBehaviour
             return;
 
         if (startInMixedReality)
-        {
-            _pendingFadeToMixedReality = true;
-            passthroughLayer.enabled = true;
-            if (_fallbackRoutine != null)
-                StopCoroutine(_fallbackRoutine);
-            _fallbackRoutine = StartCoroutine(CoResumeFallback());
-        }
+            BeginFadeToMixedReality();
     }
 
     private void RestoreCameraForVirtualReality()
@@ -201,14 +196,29 @@ public sealed class PassthroughVRMRFader : MonoBehaviour
 
     private void BeginFadeToMixedReality()
     {
+        if (_inTransition)
+            return;
+
+        _pendingFadeToMixedReality = false;
+        if (_fallbackRoutine != null)
+        {
+            StopCoroutine(_fallbackRoutine);
+            _fallbackRoutine = null;
+        }
+
         ApplyFadeDirectionToMaterial();
         onFadeInStarted?.Invoke();
-        _pendingFadeToMixedReality = true;
         passthroughLayer.enabled = true;
 
-        if (_fallbackRoutine != null)
-            StopCoroutine(_fallbackRoutine);
-        _fallbackRoutine = StartCoroutine(CoResumeFallback());
+        // 直接进入淡入，避免等待 passthroughLayerResumed 导致“瞬切”或延迟。
+        if (faderSphereRenderer != null)
+            faderSphereRenderer.enabled = true;
+        if (xrCamera != null)
+        {
+            xrCamera.clearFlags = CameraClearFlags.Skybox;
+            xrCamera.backgroundColor = _savedBgColor;
+        }
+        StartCoroutine(FadeAlphaTowards(1f, isFadeInToMixedReality: true));
     }
 
     private void BeginFadeToVirtualReality()

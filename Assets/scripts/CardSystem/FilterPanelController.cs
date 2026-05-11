@@ -27,10 +27,30 @@ public class FilterPanelController : MonoBehaviour
 
     private string openedPanel = string.Empty;
     private bool _foldListenersAdded;
+    private bool _actionListenersAdded;
+    private bool _initialized;
+    private int _lastToggleFrame = -1;
+    private string _lastTogglePanel = string.Empty;
+    private float _lastToggleTime = -10f;
 
     private void Awake()
     {
+        AutoBindIfMissing();
         EnsureFoldButtonListeners();
+        EnsureActionButtonListeners();
+    }
+
+    private void OnEnable()
+    {
+        // 防止运行中对象重建/切页导致监听丢失
+        AutoBindIfMissing();
+        EnsureFoldButtonListeners();
+        EnsureActionButtonListeners();
+    }
+
+    private void Start()
+    {
+        StartCoroutine(TryInitializeWhenReady());
     }
 
     /// <summary>
@@ -39,22 +59,93 @@ public class FilterPanelController : MonoBehaviour
     /// </summary>
     private void EnsureFoldButtonListeners()
     {
-        if (_foldListenersAdded)
-            return;
-        if (recipientFoldButton == null && politicalFoldButton == null)
-            return;
-
         if (recipientFoldButton != null)
-            recipientFoldButton.onClick.AddListener(() => TogglePanel("recipient"));
+        {
+            recipientFoldButton.onClick.RemoveListener(OnRecipientFoldClicked);
+            recipientFoldButton.onClick.AddListener(OnRecipientFoldClicked);
+        }
         if (politicalFoldButton != null)
-            politicalFoldButton.onClick.AddListener(() => TogglePanel("political"));
+        {
+            politicalFoldButton.onClick.RemoveListener(OnPoliticalFoldClicked);
+            politicalFoldButton.onClick.AddListener(OnPoliticalFoldClicked);
+        }
 
-        _foldListenersAdded = true;
+        _foldListenersAdded = recipientFoldButton != null || politicalFoldButton != null;
+    }
+
+    private void EnsureActionButtonListeners()
+    {
+        if (_actionListenersAdded)
+            return;
+
+        if (resetButton != null)
+        {
+            resetButton.onClick.RemoveListener(ResetFilter);
+            resetButton.onClick.AddListener(ResetFilter);
+        }
+
+        if (applyButton != null)
+        {
+            applyButton.onClick.RemoveListener(ApplyFilter);
+            applyButton.onClick.AddListener(ApplyFilter);
+        }
+
+        _actionListenersAdded = true;
+    }
+
+    private void AutoBindIfMissing()
+    {
+        // 在场景里按常用命名自动找，减少手动拖引用导致的“点了没反应”。
+        if (recipientFoldButton == null)
+            recipientFoldButton = transform.Find("RecipientFoldButton")?.GetComponent<Button>();
+        if (politicalFoldButton == null)
+            politicalFoldButton = transform.Find("PoliticalFoldButton")?.GetComponent<Button>();
+        if (resetButton == null)
+            resetButton = transform.Find("ResetButton")?.GetComponent<Button>();
+        if (applyButton == null)
+            applyButton = transform.Find("ApplyButton")?.GetComponent<Button>();
+
+        if (recipientDropdown == null)
+            recipientDropdown = transform.Find("RecipientDropdown")?.gameObject;
+        if (politicalDropdown == null)
+            politicalDropdown = transform.Find("PoliticalDropdown")?.gameObject;
+
+        if (recipientRepository == null)
+            recipientRepository = GetComponentInChildren<RecipientRepository>(true);
+        if (recipientSelector == null)
+            recipientSelector = GetComponentInChildren<RecipientSelectorController>(true);
+        if (politicalSelector == null)
+            politicalSelector = GetComponentInChildren<PoliticalSelectorController>(true);
+        if (selectedConditions == null)
+            selectedConditions = GetComponentInChildren<SelectedConditionsController>(true);
+        if (cardManager == null)
+            cardManager = CardManager.Instance != null ? CardManager.Instance : FindFirstObjectByType<CardManager>();
+    }
+
+    private System.Collections.IEnumerator TryInitializeWhenReady()
+    {
+        if (_initialized)
+            yield break;
+
+        // 给 CardManager.LoadDatabase 一个时机，避免与 Start 时序竞争。
+        for (int i = 0; i < 120 && !_initialized; i++)
+        {
+            AutoBindIfMissing();
+
+            List<string> goals = new List<string>();
+            if (cardManager != null && cardManager.GetDatabase() != null)
+                goals = new CardFilter().GetAllPoliticalGoals(cardManager.GetDatabase());
+
+            Initialize(goals);
+            _initialized = true;
+            yield break;
+        }
     }
 
     public void Initialize(List<string> politicalGoals)
     {
         EnsureFoldButtonListeners();
+        EnsureActionButtonListeners();
 
         if (recipientRepository != null)
             recipientRepository.Load();
@@ -73,9 +164,24 @@ public class FilterPanelController : MonoBehaviour
 
     public void TogglePanel(string panelName)
     {
+        // XR 下同一次点击可能触发两次 onClick（按下/抬起链路），这里做轻量防抖避免“开了又关”。
+        if (_lastTogglePanel == panelName && (_lastToggleFrame == Time.frameCount || Time.unscaledTime - _lastToggleTime < 0.12f))
+        {
+            Debug.Log($"[FilterPanelController] 忽略重复 TogglePanel: {panelName}");
+            return;
+        }
+
+        _lastTogglePanel = panelName;
+        _lastToggleFrame = Time.frameCount;
+        _lastToggleTime = Time.unscaledTime;
+
         openedPanel = openedPanel == panelName ? string.Empty : panelName;
+        Debug.Log($"[FilterPanelController] TogglePanel => {panelName}, openedPanel={openedPanel}");
         RefreshPanels();
     }
+
+    public void OnRecipientFoldClicked() => TogglePanel("recipient");
+    public void OnPoliticalFoldClicked() => TogglePanel("political");
 
     public void ResetFilter()
     {

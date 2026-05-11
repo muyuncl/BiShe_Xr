@@ -1,4 +1,4 @@
-﻿{
+{
   "55": {
     "inputs": {
       "mode": "image_to_model",
@@ -34,6 +34,13 @@
   "57": {
     "inputs": { "images": ["58", 0] },
     "class_type": "PreviewImage"
+  },
+  "66": {
+    "inputs": {
+      "filename_prefix": "UnityVolcanoRender",
+      "images": ["58", 0]
+    },
+    "class_type": "SaveImage"
   },
   "58": {
     "inputs": {

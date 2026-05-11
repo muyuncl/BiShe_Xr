@@ -152,7 +152,7 @@ public class CardGroupPanelView : MonoBehaviour
     private void ApplyCardSizing(RectTransform rect)
     {
         if (rect == null) return;
-        float w = layoutSettings.cardWidth;
+        float w = GetEffectiveCardWidth();
         float h = layoutSettings.GetCardHeight();
         rect.sizeDelta = new Vector2(w, h);
         var le = rect.GetComponent<LayoutElement>() ?? rect.gameObject.AddComponent<LayoutElement>();
@@ -189,7 +189,7 @@ public class CardGroupPanelView : MonoBehaviour
             gridLayoutGroup.enabled = layoutMode == CardGroupPanelLayoutMode.Grid;
             gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
             gridLayoutGroup.constraintCount = Mathf.Max(1, layoutSettings.gridColumnCount);
-            gridLayoutGroup.cellSize = new Vector2(layoutSettings.cardWidth, layoutSettings.GetCardHeight());
+            gridLayoutGroup.cellSize = new Vector2(GetEffectiveCardWidth(), layoutSettings.GetCardHeight());
             gridLayoutGroup.spacing = new Vector2(layoutSettings.spacingX, layoutSettings.spacingY);
             gridLayoutGroup.startAxis = GridLayoutGroup.Axis.Horizontal;
             gridLayoutGroup.startCorner = GridLayoutGroup.Corner.UpperLeft;
@@ -214,6 +214,29 @@ public class CardGroupPanelView : MonoBehaviour
         if (scrollRect == null) return;
         if (layoutMode == CardGroupPanelLayoutMode.Horizontal) scrollRect.horizontalNormalizedPosition = 0f;
         else scrollRect.verticalNormalizedPosition = 1f;
+    }
+
+    /// <summary>
+    /// 运行时卡片宽度兜底：避免配置值大于可视容器宽导致被左右裁切。
+    /// </summary>
+    private float GetEffectiveCardWidth()
+    {
+        float desired = layoutSettings.cardWidth;
+
+        // 配置层面的可用宽（面板尺寸 - padding）
+        float byPanel = layoutSettings.panelSize.x - layoutSettings.paddingLeft - layoutSettings.paddingRight - 2f;
+        if (byPanel > 1f)
+            desired = Mathf.Min(desired, byPanel);
+
+        // 运行时可视宽（更准确，优先）
+        if (viewportRect != null)
+        {
+            float vw = viewportRect.rect.width - 2f;
+            if (vw > 1f)
+                desired = Mathf.Min(desired, vw);
+        }
+
+        return Mathf.Max(24f, desired);
     }
 
     private GameObject CreateDisplayRoot()
