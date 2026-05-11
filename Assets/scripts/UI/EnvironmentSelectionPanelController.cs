@@ -59,6 +59,7 @@ public class EnvironmentSelectionPanelController : MonoBehaviour
                 btn.onClick.RemoveAllListeners();
                 btn.onClick.AddListener(() =>
                 {
+                    Debug.Log($"[EnvironmentSelectionPanelController] 点击环境卡片 index={idx}");
                     switcher.Apply(idx);
                     RefreshSelection();
                 });

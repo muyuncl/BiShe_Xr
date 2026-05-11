@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections.Generic;
 
 /// <summary>
 /// 将 UI Toggle（Switch）绑定到 VR/MR 切换（PassthroughVRMRFader）。
@@ -101,7 +102,7 @@ public class VRMRSwitchToggleBinder : MonoBehaviour
     {
         // MR 开：禁用 VR 场景；VR 开：恢复
         ApplyActive(disableWhenMixedRealityOn, !mixedRealityOn);
-        ApplyActive(enableWhenMixedRealityOn, mixedRealityOn);
+        ApplyActiveSkipOverlaps(enableWhenMixedRealityOn, mixedRealityOn, disableWhenMixedRealityOn);
     }
 
     private static void ApplyActive(GameObject[] list, bool active)
@@ -111,6 +112,28 @@ public class VRMRSwitchToggleBinder : MonoBehaviour
         {
             if (list[i] != null)
                 list[i].SetActive(active);
+        }
+    }
+
+    private static void ApplyActiveSkipOverlaps(GameObject[] list, bool active, GameObject[] overlapWith)
+    {
+        if (list == null) return;
+        var overlapSet = new HashSet<GameObject>();
+        if (overlapWith != null)
+        {
+            for (int i = 0; i < overlapWith.Length; i++)
+            {
+                if (overlapWith[i] != null)
+                    overlapSet.Add(overlapWith[i]);
+            }
+        }
+
+        for (int i = 0; i < list.Length; i++)
+        {
+            var go = list[i];
+            if (go == null) continue;
+            if (overlapSet.Contains(go)) continue; // 防止同一对象在两个列表里互相打架
+            go.SetActive(active);
         }
     }
 }
